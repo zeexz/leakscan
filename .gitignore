@@ -1,0 +1,23 @@
+# Compiled binaries
+leakscan
+leakscan.exe
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build outputs
+dist/
+build/
+
+# Test coverage
+coverage.out
+coverage.html

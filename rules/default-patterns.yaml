@@ -1,0 +1,49 @@
+rules:
+  - id: aws-access-key-id
+    name: AWS Access Key ID
+    description: AWS IAM user or temporary access key identifier
+    pattern: "(?i)\\b(AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}\\b"
+    severity: critical
+    remediation: Deactivate and rotate AWS credentials immediately via AWS IAM Console or AWS CLI. Audit CloudTrail logs for unauthorized usage.
+
+  - id: aws-secret-access-key
+    name: AWS Secret Access Key
+    description: AWS IAM user secret access key assignment
+    pattern: "(?i)(aws_secret_access_key|aws_secret|aws_key)\\s*[:=]\\s*['\"]?([A-Za-z0-9/+=]{40})['\"]?"
+    severity: critical
+    remediation: Rotate AWS Secret Access Key immediately via AWS IAM Console.
+
+  - id: github-token
+    name: GitHub Personal Access Token
+    description: GitHub fine-grained or classic personal access token
+    pattern: "\\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,255}\\b"
+    severity: critical
+    remediation: Revoke token immediately in GitHub Settings -> Developer settings -> Personal access tokens. Check security log.
+
+  - id: slack-token
+    name: Slack API Token
+    description: Slack bot, user, app, or workspace access token
+    pattern: "xox[baprs]-[0-9a-zA-Z]{10,48}"
+    severity: high
+    remediation: Revoke Slack token in Slack App Management settings.
+
+  - id: private-key
+    name: Private Key Header
+    description: Unencrypted RSA, EC, DSA, or OpenSSH Private Key block
+    pattern: "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"
+    severity: critical
+    remediation: Revoke and replace private key. Remove from authorized_keys and certificates.
+
+  - id: generic-env-secret
+    name: Generic Environment Secret Assignment
+    description: Variable assignment matching secret/key/token/password naming patterns with non-trivial values
+    pattern: "(?i)\\b([A-Z0-9_]*(?:SECRET|KEY|TOKEN|PASSWORD|AUTH|CREDENTIAL)[A-Z0-9_]*)\\s*[:=]\\s*['\"]?([^'\"\\s{}]{8,})['\"]?"
+    severity: high
+    remediation: Remove plain-text secrets from code/configs. Store in environment variables or secret manager (Vault, AWS Secrets Manager).
+
+  - id: bearer-token
+    name: Bearer Authorization Token
+    description: Hardcoded Authorization Bearer token header or export
+    pattern: "(?i)bearer\\s+[A-Za-z0-9_\\-\\.\x3d]{20,}"
+    severity: high
+    remediation: Invalidate token immediately and fetch dynamically via safe OAuth flow or Secret Store.
