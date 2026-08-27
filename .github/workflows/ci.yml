@@ -1,0 +1,70 @@
+name: CI
+
+# Runs on every push and every pull request targeting main.
+# Two jobs run in parallel:
+#   lint  — static analysis via golangci-lint
+#   test  — unit tests with race detector + coverage reporting
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read  # Minimum required for checkout
+
+jobs:
+  # ── Job 1: Lint ───────────────────────────────────────────
+  lint:
+    name: Lint (golangci-lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Official golangci-lint action — installs the correct version
+      # and caches the lint binary between runs automatically.
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+  # ── Job 2: Test ───────────────────────────────────────────
+  test:
+    name: Test (race + coverage)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The race detector (-race) catches data races in concurrent code
+      # such as the parallel scanner goroutines in cmd/scan.go.
+      # -count=1 disables the test result cache so we always run fresh.
+      - name: Run tests with race detector
+        run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+
+      # Print per-package coverage percentages in the workflow log
+      - name: Show coverage summary
+        run: go tool cover -func=coverage.out
+
+      # Upload coverage.out as a downloadable artifact so reviewers can
+      # inspect it or feed it into a coverage service (Codecov, etc.).
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
+          retention-days: 7

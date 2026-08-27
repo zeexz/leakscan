@@ -1,0 +1,67 @@
+name: Release
+
+# Triggered when a version tag is pushed (e.g., git tag v2.1.0 && git push origin v2.1.0).
+# This workflow:
+#   1. Runs final tests as a gate
+#   2. Installs cosign for keyless artifact signing
+#   3. Runs GoReleaser to build multi-arch binaries, generate SBOMs, sign, and publish
+on:
+  push:
+    tags:
+      - "v*"
+
+# Required permissions for:
+#   - contents: write    → create GitHub Release and upload assets
+#   - id-token: write    → cosign keyless signing via GitHub OIDC
+#   - packages: write    → push to GitHub Container Registry (optional, future)
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  release:
+    name: GoReleaser Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for changelog generation)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # GoReleaser needs full git history for changelog
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Run the full test suite one final time before publishing anything.
+      # A release with broken tests should never reach users.
+      - name: Run tests (release gate)
+        run: go test -race -count=1 ./...
+
+      # Install cosign for keyless signing.
+      # Keyless mode uses GitHub's OIDC token to obtain a short-lived
+      # certificate from Sigstore's Fulcio CA — no private key required.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      # Install syft (used by GoReleaser's sbom stanza to generate SBOMs)
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      # GoReleaser reads .goreleaser.yaml and:
+      #   - Cross-compiles binaries for linux/darwin/windows × amd64/arm64
+      #   - Generates a CycloneDX SBOM for each archive (via syft)
+      #   - Signs the checksums file (via cosign)
+      #   - Creates/updates the GitHub Release with all assets
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Needed by the .goreleaser.yaml header template
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}

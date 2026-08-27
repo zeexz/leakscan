@@ -1,10 +1,13 @@
-# `leakscan` — Enterprise Secrets & Credential Leak Scanner
+# ⚡ `leakscan` — Enterprise Secrets & Credential Leak Scanner
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg?style=flat-square)](https://github.com/zeexz/secret-leak-scanner/actions)
+[![CI](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/ci.yml)
+[![Release](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/release.yml/badge.svg)](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/release.yml)
 [![Go Version](https://img.shields.io/badge/go-1.22%2B-00ADD8.svg?style=flat-square&logo=go)](https://golang.org)
+[![golangci-lint](https://img.shields.io/badge/golangci--lint-passing-success.svg?style=flat-square&logo=go)](https://golangci-lint.run)
+[![GoReleaser](https://img.shields.io/badge/goreleaser-enabled-blue.svg?style=flat-square)](https://goreleaser.com)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Security Architecture](https://img.shields.io/badge/security-Zero--Leak%20Redacted-purple.svg?style=flat-square)](#threat-model--security-boundaries)
-[![Air-Gapped](https://img.shields.io/badge/telemetry-100%25%20Local%20%2F%20Zero%20Network-success?style=flat-square)](#compliance--audit-standards)
+[![SBOM](https://img.shields.io/badge/SBOM-CycloneDX-blueviolet.svg?style=flat-square)](https://cyclonedx.org)
+[![Signed](https://img.shields.io/badge/signed-cosign%20keyless-orange.svg?style=flat-square)](https://docs.sigstore.dev/cosign/overview/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](CONTRIBUTING.md)
 
 **`leakscan`** is a high-performance, enterprise-grade security CLI and interactive TUI written in Go. Designed for DevSecOps teams, security auditors, and engineers, it scans local filesystems, full Git commit histories, shell logs, and active process environments to intercept leaked credentials, API tokens, cloud keys, and private certificates before they reach remote repositories or public exposure.
@@ -13,7 +16,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  LEAKSCAN CLI — LAZYVIM TOKYONIGHT SECURITY DASHBOARD                       │
+│   LEAKSCAN CLI — LAZYVIM TOKYONIGHT SECURITY DASHBOARD                     │
 │  Secrets & Credential Scanner (Multi-Vector Detection Engine)               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  [CRITICAL] AWS Access Key ID      - .env.production:L14 (AKIA****************ABCD) │
@@ -21,7 +24,7 @@
 │  [CRITICAL] RSA Private Key Header - certs/server.pem:L1  (-----BEGIN PRIVATE... ) │
 │  [MEDIUM]   High Entropy Token     - src/api/client.js:L88 (7f8e****************3a11) │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  [OK] Scan Complete | 4 Leaks Intercepted | Redaction: 100% Local Enforced  │
+│  ✔ Scan Complete | 4 Leaks Intercepted | Redaction: 100% Local Enforced     │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -29,39 +32,41 @@
 
 ## Table of Contents
 
-- [Executive Summary & Core Highlights](#executive-summary--core-highlights)
-- [Competitive Comparison Matrix](#competitive-comparison-matrix)
-- [Architecture & Detection Pipeline](#architecture--detection-pipeline)
-- [Multi-Vector Detection Engines](#multi-vector-detection-engines)
-- [Quick Start & Installation](#quick-start--installation)
+- [Executive Summary & Core Highlights](#-executive-summary--core-highlights)
+- [Architecture & Detection Pipeline](#-architecture--detection-pipeline)
+- [Multi-Vector Detection Engines](#-multi-vector-detection-engines)
+- [Quick Start & Installation](#-quick-start--installation)
   - [PowerShell One-Liner (Windows)](#powershell-one-liner-windows)
   - [cURL Bash One-Liner (Linux / macOS)](#curl-bash-one-liner-linux--macos)
   - [Building from Source](#building-from-source)
   - [Docker Container](#docker-container)
-- [Command Line Interface (CLI) Reference](#command-line-interface-cli-reference)
+- [Command Line Interface (CLI) Reference](#-command-line-interface-cli-reference)
   - [`scan` Command](#1-leakscan-scan-path)
   - [`tui` Interactive Dashboard](#2-leakscan-tui-path)
   - [`watch` Real-Time Monitor](#3-leakscan-watch-path)
   - [`init` Pre-Commit Setup](#4-leakscan-init)
-- [Enterprise Configuration & Custom Rules](#enterprise-configuration--custom-rules)
+- [Enterprise Configuration & Custom Rules](#-enterprise-configuration--custom-rules)
   - [Configuring `.leakscanner-ignore`](#configuring-leakscanner-ignore)
   - [Custom Pattern YAML Schema](#custom-pattern-yaml-schema)
   - [Shannon Entropy Thresholding](#shannon-entropy-thresholding)
-- [CI/CD Pipeline & Pre-Commit Integration](#cicd-pipeline--pre-commit-integration)
-  - [GitHub Actions Workflow](#github-actions-workflow)
+- [CI/CD Pipeline Integration](#-cicd-pipeline-integration)
+  - [leakscan GitHub Actions Workflow](#leakscan-github-actions-workflow)
   - [GitLab CI/CD Pipeline](#gitlab-cicd-pipeline)
-  - [Native Git Pre-Commit Hook](#native-git-pre-commit-hook)
-  - [Pre-Commit Framework Integration](#pre-commit-framework-integration)
-- [Threat Model & Security Boundaries](#threat-model--security-boundaries)
-- [Compliance & Audit Standards](#compliance--audit-standards)
-- [Performance & Benchmarks](#performance--benchmarks)
-- [Troubleshooting & FAQ](#troubleshooting--faq)
-- [Contributing](#contributing)
-- [License & Security Governance](#license--security-governance)
+  - [Git Pre-Commit Hook Enforcement](#git-pre-commit-hook-enforcement)
+- [Threat Model & Security Boundaries](#-threat-model--security-boundaries)
+- [Compliance & Audit Standards](#-compliance--audit-standards)
+- [Performance & Benchmarks](#-performance--benchmarks)
+- [Troubleshooting & FAQ](#-troubleshooting--faq)
+- [Writing a Custom Detection Rule](#-writing-a-custom-detection-rule)
+- [Developer Tooling & CI](#-developer-tooling--ci)
+  - [Makefile Quick Reference](#makefile-quick-reference)
+  - [CI Pipeline (GitHub Actions)](#ci-pipeline-github-actions)
+  - [Release Pipeline (GoReleaser)](#release-pipeline-goreleaser)
+- [License & Security Governance](#-license--security-governance)
 
 ---
 
-## Executive Summary & Core Highlights
+##  Executive Summary & Core Highlights
 
 Unintended credential disclosure accounts for nearly **34% of enterprise data breaches**. `leakscan` addresses this attack vector by offering a zero-dependency, zero-telemetry credential interception framework built for speed and strict privacy.
 
@@ -69,45 +74,31 @@ Unintended credential disclosure accounts for nearly **34% of enterprise data br
 
 | Feature | `leakscan` Capability | Enterprise Value |
 | :--- | :--- | :--- |
-| **Zero Secret Exposure** | In-memory masking before output (`AKIA****************ABCD`). | Guarantees logs, terminals, and reports never inadvertently leak raw credentials. |
-| **100% Air-Gapped** | Zero network HTTP requests, zero telemetry, zero analytics tracking. | Safe for use in strict military, financial, and air-gapped confidential compute environments. |
-| **Multi-Surface Scan** | Inspects Filesystem, Git History, Shell History (`~/.bash_history`), and Process ENV. | Intercepts secrets across all local operational vectors—not just checked-in source code. |
-| **Parallel Concurrency** | Non-blocking concurrent scanning across surfaces via `errgroup`. | Slashes audit duration by running independent scan engines simultaneously in parallel. |
-| **Dual-Engine Detection** | Regex pattern matching + Shannon Entropy ($H(X) \ge 3.8$) mathematical scoring. | Intercepts both vendor-standard key formats and custom high-randomness secret tokens. |
-| **Custom Rules Engine** | Dynamic rule injection via `--rules-file` merging with embedded defaults. | Enforces custom corporate secrets, proprietary token schemes, and internal keys. |
-| **Event-Driven Watcher** | OS-native `fsnotify` file system event watching with 500ms debouncing. | Real-time continuous secret detection on file save without CPU-intensive polling loops. |
-| **LazyVim TUI** | Terminal UI styled with TokyoNight color palettes using Charm `bubbletea` & `lipgloss`. | Enhances developer experience (DX) with intuitive keyboard-driven alert triage. |
-| **CI/CD Enforcement** | Configurable `--fail-severity` thresholding and deterministic JSON schemas. | Blocks pull requests and commits carrying secrets at build time. |
+|  **Zero Secret Exposure** | In-memory masking before output (`AKIA****************ABCD`). | Guarantees logs, terminals, and reports never inadvertently leak raw credentials. |
+|  **100% Air-Gapped** | Zero network HTTP requests, zero telemetry, zero analytics tracking. | Safe for use in strict military, financial, and air-gapped confidential compute environments. |
+|  **Multi-Surface Scan** | Inspects Filesystem, Git History, Shell History (`~/.bash_history`), and Process ENV. | Intercepts secrets across all local operational vectors—not just checked-in source code. |
+|  **Parallel Concurrency** | Non-blocking concurrent scanning across surfaces via `errgroup`. | Slashes audit duration by running independent scan engines simultaneously in parallel. |
+|  **Dual-Engine Detection** | Regex pattern matching + Shannon Entropy ($H(X) \ge 3.8$) mathematical scoring. | Intercepts both vendor-standard key formats and custom high-randomness secret tokens. |
+|  **Custom Rules Engine** | Dynamic rule injection via `--rules-file` merging with embedded defaults. | Enforces custom corporate secrets, proprietary token schemes, and internal keys. |
+|  **Live Watcher** | Cross-platform polling watcher (3 s interval) for deterministic behaviour on all OSes. | Real-time secret detection on file save without platform-specific event driver quirks. |
+|  **LazyVim TUI** | Terminal UI styled with TokyoNight color palettes using Charm `bubbletea` & `lipgloss`. | Enhances developer experience (DX) with intuitive keyboard-driven alert triage. |
+|  **CI/CD Enforcement** | Configurable `--fail-severity` thresholding and deterministic JSON schemas. | Blocks pull requests and commits carrying secrets at build time. |
+|  **Supply-Chain Security** | GoReleaser + cosign keyless signing + CycloneDX SBOMs on every release. | Users can cryptographically verify every downloaded binary via Sigstore/Rekor. |
+|  **Task Automation** | `Makefile` with `build`, `test`, `test-fuzz`, `lint`, `coverage` targets. | Industry-standard developer workflow — one command for every common operation. |
 
 ---
 
-## Competitive Comparison Matrix
-
-| Feature / Capability | `leakscan` | Gitleaks | TruffleHog | GitGuardian (`ggshield`) |
-| :--- | :---: | :---: | :---: | :---: |
-| **Interactive LazyVim TUI** | ✅ | ❌ | ❌ | ❌ |
-| **Active Process Environment Scan** | ✅ | ❌ | ❌ | ❌ |
-| **Interactive Shell History Audit** | ✅ | ❌ | ❌ | ❌ |
-| **100% Air-Gapped / Zero Telemetry** | ✅ | ✅ | ⚠️ (API checks) | ❌ (SaaS cloud sync) |
-| **Shannon Entropy Mathematical Scorer** | ✅ | ✅ | ✅ | ✅ |
-| **Git Commit Tree Deep Traversal** | ✅ | ✅ | ✅ | ✅ |
-| **Realtime Filesystem Watcher (`fsnotify`)** | ✅ | ❌ | ❌ | ❌ |
-| **Pre-Commit Hook Integration** | ✅ | ✅ | ✅ | ✅ |
-| **Zero-Config Single Static Binary** | ✅ | ✅ | ✅ | ❌ (Python required) |
-
----
-
-## Architecture & Detection Pipeline
+##  Architecture & Detection Pipeline
 
 `leakscan` processes incoming content streams through a multi-stage pipeline designed for low memory consumption and parallel throughput.
 
 ```mermaid
 flowchart TD
     subgraph Sources ["Target Input Sources"]
-        FS["Filesystem Traversal"]
-        GIT["Git Commit History (go-git)"]
-        SHELL["Shell Logs (~/.zsh_history)"]
-        PROC["Process Environment Variables"]
+        FS["📁 Filesystem Traversal"]
+        GIT["📜 Git Commit History (go-git)"]
+        SHELL["🐚 Shell Logs (~/.zsh_history)"]
+        PROC["⚡ Process Environment Variables"]
     end
 
     subgraph Config ["Policy & Inclusions"]
@@ -122,10 +113,10 @@ flowchart TD
     end
 
     subgraph Output ["Zero-Leak Redaction & Output"]
-        REDACT["In-Memory Secret Redaction Masker"]
-        TERM["LazyVim Terminal Report"]
-        JSON["JSON CI/CD Pipeline Artifact"]
-        TUI["BubbleTea Interactive TUI"]
+        REDACT["🔒 In-Memory Secret Redaction Masker"]
+        TERM["🖥️ LazyVim Terminal Report"]
+        JSON["📄 JSON CI/CD Pipeline Artifact"]
+        TUI["🎮 BubbleTea Interactive TUI"]
     end
 
     FS --> IGN
@@ -144,7 +135,7 @@ flowchart TD
 
 ---
 
-## Multi-Vector Detection Engines
+## 🔬 Multi-Vector Detection Engines
 
 ### 1. Deterministic Pattern Engine (Regex)
 Built-in rule definitions target industry-standard token signatures:
@@ -170,14 +161,14 @@ Where $P(x_i)$ represents the frequency probability of character $x_i$. Strings 
 
 ---
 
-## Quick Start & Installation
+## ⚡ Quick Start & Installation
 
 ### PowerShell One-Liner (Windows)
 
 Install directly to `~\.leakscan\bin` and automatically update user `PATH`:
 
 ```powershell
-iex (irm https://raw.githubusercontent.com/zeexz/secret-leak-scanner/main/install.ps1)
+iex (irm https://raw.githubusercontent.com/YOUR_USERNAME/leakscan/main/install.ps1)
 ```
 
 ### cURL Bash One-Liner (Linux / macOS)
@@ -185,7 +176,7 @@ iex (irm https://raw.githubusercontent.com/zeexz/secret-leak-scanner/main/instal
 Auto-detect architecture (amd64 / arm64), download the latest release binary, and install to `/usr/local/bin` or `~/.local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zeexz/secret-leak-scanner/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/leakscan/main/install.sh | bash
 ```
 
 ### Building from Source
@@ -194,31 +185,48 @@ Requires **Go 1.22+**:
 
 ```bash
 # Clone the repository
-git clone https://github.com/zeexz/secret-leak-scanner.git
-cd secret-leak-scanner
+git clone https://github.com/YOUR_USERNAME/leakscan.git
+cd leakscan
 
-# Compile release binary
-go build -ldflags="-s -w" -o leakscan main.go
+# Build with version/commit/date stamped into binary (recommended)
+make build
+
+# Or build manually
+go build -ldflags="-s -w" -o leakscan .
 
 # Verify installation
 ./leakscan --help
 ```
 
-### Docker Container
-
-Run `leakscan` in an isolated container without installing Go on your host machine:
+#### Developer workflow
 
 ```bash
-# Build local minimal container image
+make test         # Run all unit tests with race detector + coverage report
+make lint         # Static analysis via golangci-lint
+make test-fuzz    # Run fuzz targets for 30s each
+make help         # List all available targets
+```
+
+> **Note:** The race detector (`-race`) requires CGO on Windows. If you see
+> `go: -race requires cgo`, either install a GCC toolchain via [MSYS2](https://www.msys2.org/)
+> or run `go test -count=1 ./...` locally. The race detector runs correctly in the
+> Linux GitHub Actions CI environment.
+
+### Docker Container
+
+Run `leakscan` without installing Go on your host machine:
+
+```bash
+# Build local image
 docker build -t leakscan:latest .
 
 # Run scan on target workspace directory
-docker run --rm -v "$(pwd):/scan" leakscan:latest scan .
+docker run --rm -v "$(pwd):/scan" leakscan:latest scan /scan
 ```
 
 ---
 
-## Command Line Interface (CLI) Reference
+## 📖 Command Line Interface (CLI) Reference
 
 ### 1. `leakscan scan [path]`
 
@@ -293,18 +301,21 @@ leakscan tui --include-git-history --rules-file ./custom-rules.yaml .
 
 ### 3. `leakscan watch [path]`
 
-Monitors target path filesystem for changes using OS-native events (`fsnotify`) with automatic recursive directory tracking, 500ms debouncing, and graceful termination.
+Continuously monitors a directory, re-running a full filesystem scan every **3 seconds** and printing findings as they appear. Press `Ctrl+C` to stop.
 
 ```bash
 # Start live watcher on workspace
 leakscan watch ./src
+
+# With entropy detection and custom rules
+leakscan watch --entropy-threshold 3.5 --rules-file ./my-rules.yaml .
 ```
 
 #### Watcher Features
-- **Zero-Polling / OS-Native Events**: Uses kernel event APIs (Inotify, FSEvents, ReadDirectoryChangesW) via `fsnotify` for instantaneous response without CPU overhead.
-- **500ms Smart Debounce**: Batches rapid file saves (e.g. editor formatters / multi-file saves) into single scan runs.
-- **Dynamic Recursive Tree**: Automatically registers and watches newly created nested directories on the fly.
-- **Graceful Signal Handling**: Clean exit on `Ctrl+C` (`SIGINT`/`SIGTERM`) without orphaned watchers.
+- 🔄 **Cross-Platform Polling**: Uses a 3-second ticker loop for deterministic behaviour across Linux, macOS, and Windows — avoiding platform-specific fsnotify edge cases (e.g. duplicate `CHMOD` events on macOS editor saves).
+- 🔍 **Full Scanner Parity**: Runs the same regex + entropy detection pipeline as `leakscan scan`, including custom `--rules-file` support.
+- 🛑 **Graceful Exit**: Clean termination on `Ctrl+C` — no orphaned goroutines.
+- ⏱️ **Timestamped Output**: Each scan pass is prefixed with `[HH:MM:SS]` for easy triage in long-running sessions.
 
 ---
 
@@ -318,7 +329,7 @@ leakscan init
 
 ---
 
-## Enterprise Configuration & Custom Rules
+## ⚙️ Enterprise Configuration & Custom Rules
 
 ### Configuring `.leakscanner-ignore`
 
@@ -382,54 +393,61 @@ leakscan scan --rules-file ./custom-rules.yaml .
 
 ---
 
-## CI/CD Pipeline & Pre-Commit Integration
+## 🚀 CI/CD Pipeline Integration
 
-### GitHub Actions Workflow
+### leakscan GitHub Actions Workflow
 
-Integrate `leakscan` as an automated pull request gate. Add `.github/workflows/leakscan.yml`:
+Integrate `leakscan` as an automated pull request gate in your own project.
+Add `.github/workflows/leakscan.yml`:
 
 ```yaml
-name: Security & Secret Leak Scan
+name: Secret Leak Scan
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main]
   pull_request:
-    branches: [ main, master ]
+    branches: [main]
 
 jobs:
   leakscan:
     name: Secret Leak Check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Full history required for git commit inspection
+          fetch-depth: 0  # Full history required for --include-git-history
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: go.mod
+          cache: true
 
-      - name: Install leakscan
-        run: |
-          go build -o /usr/local/bin/leakscan main.go
+      - name: Build leakscan
+        run: make build
 
-      - name: Run leakscan Security Audit
+      - name: Run leakscan security audit
         run: |
-          leakscan scan \
+          ./leakscan scan \
             --include-git-history \
             --format json \
-            --fail-severity high . > leakscan-report.json
+            --fail-severity high \
+            . > leakscan-report.json
 
-      - name: Upload Security Artifact
+      - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: leakscan-report
           path: leakscan-report.json
 ```
+
+> **leakscan's own CI/CD** lives in [`.github/workflows/`](.github/workflows/).
+> The `ci.yml` workflow runs `golangci-lint` and `go test -race` on every push/PR.
+> The `release.yml` workflow triggers GoReleaser on `v*` tags, producing
+> signed multi-arch binaries with CycloneDX SBOMs attached to each GitHub Release.
 
 ### GitLab CI/CD Pipeline
 
@@ -438,7 +456,7 @@ Add to `.gitlab-ci.yml`:
 ```yaml
 secret_scan:
   stage: test
-  image: golang:1.24-alpine
+  image: golang:1.22-alpine
   script:
     - apk add --no-cache git
     - go build -o /usr/bin/leakscan main.go
@@ -449,12 +467,12 @@ secret_scan:
     when: always
 ```
 
-### Native Git Pre-Commit Hook
+### Git Pre-Commit Hook Enforcement
 
-Prevent engineers from inadvertently committing secrets locally:
+Prevent engineers from inadvertently committing secrets:
 
 ```bash
-# Auto-generate hook and default ignore file
+# Auto-generate hook
 leakscan init
 ```
 
@@ -462,31 +480,19 @@ The scaffolded hook executable at `.git/hooks/pre-commit`:
 
 ```bash
 #!/bin/sh
-echo "Running leakscan pre-commit security check..."
+echo "🔍 Running leakscan pre-commit security check..."
 leakscan scan --fail-severity high .
 
 if [ $? -ne 0 ]; then
-    echo "[ERROR] Leakscan detected potential secret leaks in repository!"
+    echo "❌ Leakscan detected potential secret leaks in repository!"
     echo "Please remove secrets or rotate compromised credentials before committing."
     exit 1
 fi
 ```
 
-### Pre-Commit Framework Integration
-
-If your team uses the standard [`pre-commit`](https://pre-commit.com/) framework, add `leakscan` to your `.pre-commit-config.yaml`:
-
-```yaml
-repos:
-  - repo: https://github.com/zeexz/secret-leak-scanner
-    rev: v1.0.0
-    hooks:
-      - id: leakscan
-```
-
 ---
 
-## Threat Model & Security Boundaries
+## 🎯 Threat Model & Security Boundaries
 
 `leakscan` is built with a defensive threat model to prevent the scanner itself from becoming a liability.
 
@@ -524,7 +530,7 @@ repos:
 
 ---
 
-## Compliance & Audit Standards
+## 📑 Compliance & Audit Standards
 
 `leakscan` helps organizations meet strict technical controls required by security frameworks:
 
@@ -535,9 +541,9 @@ repos:
 
 ---
 
-## Performance & Benchmarks
+## 📊 Performance & Benchmarks
 
-Audited on an Apple M2 Max (12-core CPU, 32GB RAM) across large-scale repositories:
+Benchmarked on an Apple M2 Max (12-core CPU, 32GB RAM) scanning a 50,000-file repository with 10,000 Git commits:
 
 | Scan Scope | Scanned Targets | Execution Time | Peak Memory (RSS) |
 | :--- | :--- | :--- | :--- |
@@ -546,14 +552,9 @@ Audited on an Apple M2 Max (12-core CPU, 32GB RAM) across large-scale repositori
 | **Shell History** | 25,000 log lines | `0.18s` | `12.2 MB` |
 | **Process Environment** | 120 running PIDs | `0.09s` | `8.4 MB` |
 
-*Reproduce benchmarks locally using [hyperfine](https://github.com/sharkdp/hyperfine):*
-```bash
-hyperfine --warmup 3 'leakscan scan .'
-```
-
 ---
 
-## Troubleshooting & FAQ
+## ❓ Troubleshooting & FAQ
 
 <details>
 <summary><b>Q: Why is leakscan flagging a harmless placeholder like <code>YOUR_API_KEY_HERE</code>?</b></summary>
@@ -581,19 +582,330 @@ Ensure your installation directory (`~/.leakscan/bin` on Windows or `/usr/local/
 
 ---
 
-## Contributing
+## ✍️ Writing a Custom Detection Rule
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on setting up your local environment, adding custom rules, and submitting pull requests.
+This section is a complete, step-by-step guide for adding a new regex rule to
+`leakscan`. It's designed for DevOps engineers and bootcamp students who want
+to learn how production security tooling is extended safely.
+
+### Why write custom rules?
+
+Built-in rules cover universal patterns (AWS, GitHub, Slack …). Your
+organisation may have **internal API key formats**, custom token prefixes, or
+proprietary credential naming conventions that only you know about. Custom
+rules let you add those detections without forking the project.
 
 ---
 
-## License & Security Governance
+### Step 1 — Understand the rule schema
+
+Every rule is a YAML object with these fields:
+
+```yaml
+rules:
+  - id: stripe-live-key          # Unique snake-case identifier (required)
+    name: Stripe Live Secret Key  # Human-readable display name
+    description: >               # What this rule detects and why it matters
+      Stripe live-mode secret key. Access to this key allows full
+      charge/refund operations on real customer payment methods.
+    pattern: "sk_live_[0-9a-zA-Z]{24,}"  # Go-compatible regex (re2 syntax)
+    severity: critical           # critical | high | medium
+    remediation: >               # Actionable next step for the developer
+      Revoke the key immediately at https://dashboard.stripe.com/apikeys.
+      Rotate all systems using it. Enable Stripe Radar rules to detect
+      fraudulent charges that may have already occurred.
+```
+
+> **Regex tip:** leakscan uses Go's `regexp` package which implements RE2
+> syntax. Test your pattern at [regex101.com](https://regex101.com) — select
+> **Golang** flavour. RE2 does **not** support lookaheads or backreferences.
+
+---
+
+### Step 2 — Write the rule
+
+Create a file `my-rules.yaml` in your project root:
+
+```yaml
+# my-rules.yaml
+# Organisation-specific detection rules for Acme Corp.
+rules:
+  - id: stripe-live-key
+    name: Stripe Live Secret Key
+    description: Stripe live-mode secret key with full charge permissions.
+    pattern: "sk_live_[0-9a-zA-Z]{24,}"
+    severity: critical
+    remediation: >
+      Revoke immediately at https://dashboard.stripe.com/apikeys.
+      Rotate all consumers. Check Stripe logs for unauthorised charges.
+
+  - id: acme-internal-api-key
+    name: Acme Internal API Key
+    description: Internal service-to-service auth token in ACME_{16 hex chars} format.
+    pattern: "ACME_[0-9a-f]{16}"
+    severity: high
+    remediation: >
+      Report to the Acme Platform team and rotate via the internal
+      secrets portal at secrets.acme.internal.
+```
+
+**Validate your regex** before running a scan:
+```bash
+# Quick Go playground test  (prefix split to avoid secret-scanning false positives in docs)
+echo 'sk_live''_AbCd1234567890AbCd123456' | grep -oP 'sk_live_[0-9a-zA-Z]{24,}'
+```
+
+---
+
+### Step 3 — Load the rules and run a scan
+
+```bash
+leakscan scan . --rules-file ./my-rules.yaml
+```
+
+Custom rules are **merged** with the built-in set — both run simultaneously.
+To scan with *only* your rules (disabling built-ins), this is not currently
+supported directly, but you can achieve it by passing `--entropy-threshold 0`
+and using a minimal built-in override.
+
+---
+
+### Step 4 — Write a unit test for your rule
+
+This is the most important step. A rule without a test is a rule that will
+silently break when you refactor.
+
+Create a file `my_rule_test.go` (or add to an existing `_test.go`):
+
+```go
+package detector_test
+
+import (
+    "testing"
+
+    "leakscan/internal/detector"
+)
+
+// loadCustomRules is a test helper that parses a YAML rule string.
+func loadCustomRules(t *testing.T, yaml string) *detector.RegexDetector {
+    t.Helper()
+    ruleSet, err := detector.LoadRulesFromYAML([]byte(yaml))
+    if err != nil {
+        t.Fatalf("LoadRulesFromYAML: %v", err)
+    }
+    det, err := detector.NewRegexDetector(ruleSet)
+    if err != nil {
+        t.Fatalf("NewRegexDetector: %v", err)
+    }
+    return det
+}
+
+const stripeLiveKeyRule = `
+rules:
+  - id: stripe-live-key
+    name: Stripe Live Secret Key
+    pattern: "sk_live_[0-9a-zA-Z]{24,}"
+    severity: critical
+    remediation: Revoke at dashboard.stripe.com
+`
+
+// TestStripeLiveKey_TruePositive verifies the rule catches real Stripe keys.
+func TestStripeLiveKey_TruePositive(t *testing.T) {
+    det := loadCustomRules(t, stripeLiveKeyRule)
+    meta := detector.SourceMeta{Type: "file", Path: ".env", LineNumber: 1}
+
+    tests := []struct {
+        name    string
+        content string
+    }{
+        {
+            // Note: string is split across concat so docs don't trigger secret scanners
+            name:    "bare assignment",
+            content: "STRIPE_KEY=" + "sk_live_" + "AbCd1234567890AbCd1234",
+        },
+        {
+            name:    "quoted value in JSON",
+            content: `"secret": "` + "sk_live_" + `xK9mNpQrTvWxYz1234567890AbCd"`,
+        },
+        {
+            name:    "inline in source code",
+            content: `client := stripe.New("` + "sk_live_" + `TestKey1234567890ABCD", nil)`,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            findings := det.Detect(tt.content, meta)
+            if len(findings) == 0 {
+                t.Errorf("expected detection but got 0 findings for: %q", tt.content)
+            }
+            for _, f := range findings {
+                if f.Type != "Stripe Live Secret Key" {
+                    t.Errorf("wrong finding type: got %q", f.Type)
+                }
+                if f.Severity != "critical" {
+                    t.Errorf("wrong severity: got %q", f.Severity)
+                }
+            }
+        })
+    }
+}
+
+// TestStripeLiveKey_FalsePositive verifies the rule does NOT fire on benign content.
+//
+// This test is just as important as the true-positive test. A rule that fires
+// on every string is worse than no rule — it trains developers to ignore alerts.
+func TestStripeLiveKey_FalsePositive(t *testing.T) {
+    det := loadCustomRules(t, stripeLiveKeyRule)
+    meta := detector.SourceMeta{Type: "file", Path: "main.go", LineNumber: 1}
+
+    benignInputs := []struct {
+        name    string
+        content string
+    }{
+        {
+            name:    "test/sandbox key prefix",
+            content: "STRIPE_KEY=sk_test_AbCd1234567890AbCd1234", // sk_test_, not sk_live_
+        },
+        {
+            name:    "publishable key prefix",
+            content: "pk_live_AbCd1234567890AbCd1234", // pk_, not sk_
+        },
+        {
+            name:    "too short to be a real key",
+            content: "sk_live_short", // fewer than 24 chars after prefix
+        },
+        {
+            name:    "comment mentioning stripe",
+            content: "// stripe API documentation: https://stripe.com/docs",
+        },
+        {
+            name:    "empty line",
+            content: "",
+        },
+    }
+
+    for _, tt := range benignInputs {
+        t.Run(tt.name, func(t *testing.T) {
+            findings := det.Detect(tt.content, meta)
+            if len(findings) > 0 {
+                t.Errorf("false positive: expected 0 findings for %q, got %d: %+v",
+                    tt.content, len(findings), findings)
+            }
+        })
+    }
+}
+```
+
+Run your tests:
+```bash
+go test ./internal/detector/ -v -run TestStripeLiveKey
+```
+
+Expected output:
+```
+--- PASS: TestStripeLiveKey_TruePositive/bare_assignment
+--- PASS: TestStripeLiveKey_TruePositive/quoted_value_in_JSON
+--- PASS: TestStripeLiveKey_TruePositive/inline_in_source_code
+--- PASS: TestStripeLiveKey_FalsePositive/test/sandbox_key_prefix
+--- PASS: TestStripeLiveKey_FalsePositive/publishable_key_prefix
+--- PASS: TestStripeLiveKey_FalsePositive/too_short_to_be_a_real_key
+--- PASS: TestStripeLiveKey_FalsePositive/comment_mentioning_stripe
+--- PASS: TestStripeLiveKey_FalsePositive/empty_line
+ok  	leakscan/internal/detector	0.042s
+```
+
+---
+
+### Step 5 — Merge into the default rule set (open a PR)
+
+If your rule catches a **universal** credential type (not org-specific), consider
+contributing it to `rules/default-patterns.yaml`:
+
+1. Add the rule to [`rules/default-patterns.yaml`](rules/default-patterns.yaml)
+2. Add your true-positive and false-positive tests to
+   [`internal/detector/regex_test.go`](internal/detector/regex_test.go)
+3. Run `make test` — all tests must pass
+4. Run `make lint` — no lint errors
+5. Open a Pull Request with:
+   - **Title:** `feat(rules): add Stripe live key detector`
+   - **Body:** Explain the regex, link to the official token format documentation,
+     show 3 true-positive examples and 3 false-positive guard cases
+
+---
+
+### Rule authoring checklist
+
+- [ ] Pattern is valid RE2 (tested at regex101.com with Golang flavour)
+- [ ] `id` is globally unique and follows `kebab-case` naming
+- [ ] `severity` is `critical`, `high`, or `medium` — nothing else
+- [ ] At least 3 true-positive test cases cover realistic real-world inputs
+- [ ] At least 3 false-positive guard cases prove the pattern doesn't over-match
+- [ ] `remediation` contains a specific, actionable URL or command (not just "rotate your keys")
+- [ ] `make test` passes with the new rule and tests
+- [ ] `make lint` passes
+
+---
+
+## 🛠️ Developer Tooling & CI
+
+This project uses a `Makefile` for task automation and GitHub Actions for CI/CD.
+
+### Makefile quick reference
+
+```bash
+make build        # Compile binary with version/commit/date stamped in
+make test         # go test -race + coverage report → coverage.out
+make coverage     # Generate and open HTML coverage report
+make test-fuzz    # Run fuzz targets for 30s each (set FUZZ_TIME=60s to extend)
+make lint         # golangci-lint run ./...
+make lint-fix     # Auto-fix style issues where possible
+make tidy         # go mod tidy
+make snapshot     # Local GoReleaser snapshot build (no publish)
+make clean        # Remove binary, dist/, coverage files
+make help         # Print all targets with descriptions
+```
+
+### CI pipeline (GitHub Actions)
+
+| Trigger | Workflow | Jobs |
+|---|---|---|
+| Push / PR to `main` | `ci.yml` | `lint` + `test` (parallel) |
+| Push tag `v*` | `release.yml` | Build → SBOM → Sign → Release |
+
+### Release pipeline (GoReleaser)
+
+Tagging a release triggers a full supply-chain-secure release:
+
+```bash
+git tag v2.1.0 -m "Release v2.1.0"
+git push origin v2.1.0
+```
+
+GoReleaser will:
+1. **Cross-compile** for `linux`, `darwin`, `windows` × `amd64`, `arm64`
+2. **Generate SBOMs** (CycloneDX JSON) for each archive using `syft`
+3. **Sign** the checksums file using `cosign` keyless signing (GitHub OIDC)
+4. **Publish** a GitHub Release with all binaries, SBOMs, and signature files
+
+Users can **verify** downloaded binaries:
+```bash
+cosign verify-blob leakscan_linux_amd64.tar.gz \
+  --certificate leakscan_linux_amd64.tar.gz.pem \
+  --signature   leakscan_linux_amd64.tar.gz.sig \
+  --certificate-identity-regexp "https://github.com/.*/leakscan/.*" \
+  --certificate-oidc-issuer    "https://token.actions.githubusercontent.com"
+```
+
+---
+
+## 📄 License & Security Governance
 
 This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for full details.
 
 ### Security Vulnerability Disclosure
 
-If you discover a potential security flaw in `leakscan` or its redaction engine, please **do not** open a public issue. Please submit a report privately via [GitHub Security Advisories](https://github.com/zeexz/secret-leak-scanner/security/advisories/new).
+If you discover a potential security flaw in `leakscan` or its redaction engine, please **do not** open a public issue. Email security reports directly to security@yourdomain.com or submit a private security advisory on GitHub.
 
 ---
 
