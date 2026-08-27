@@ -1,7 +1,9 @@
 package detector
 
 import (
+	"strings"
 	"testing"
+
 	"leakscan/rules"
 )
 
@@ -111,4 +113,59 @@ func TestRegexDetector_FalsePositives(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ── Fuzz Tests ──────────────────────────────────────────────────────────────
+//
+// Fuzz tests feed pseudo-random mutations of an initial seed corpus into the
+// target function and assert that it never panics. They are NOT run during
+// 'go test ./...' — only via 'go test -fuzz=<FuzzFuncName>'.
+//
+// Run with:  make test-fuzz
+// or:        go test -fuzz=FuzzRegexDetector_NoPanic -fuzztime=60s ./internal/detector/
+
+// FuzzRegexDetector_NoPanic verifies that Detect() is safe against any input
+// string — it must never panic regardless of what the fuzzer generates.
+func FuzzRegexDetector_NoPanic(f *testing.F) {
+	// Seed the fuzzer with interesting starting values.
+	// The fuzzer will mutate these to explore edge cases.
+	f.Add("AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE")
+	f.Add("export GITHUB_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz")
+	f.Add("-----BEGIN RSA PRIVATE KEY-----")
+	f.Add("")
+	f.Add("\x00\x01\x02\xff")               // Raw bytes
+	f.Add("normal_var=123")                  // Benign assignment
+	f.Add(strings.Repeat("A", 10_000))       // Very long line
+	f.Add("key=" + strings.Repeat("x", 200)) // Long value
+
+	ruleSet, err := LoadRulesFromYAML(rules.DefaultPatternsYAML)
+	if err != nil {
+		f.Fatalf("Failed to load rules: %v", err)
+	}
+	det, err := NewRegexDetector(ruleSet)
+	if err != nil {
+		f.Fatalf("Failed to create regex detector: %v", err)
+	}
+
+	f.Fuzz(func(t *testing.T, content string) {
+		// Must not panic — findings may be anything
+		meta := SourceMeta{Type: "file", Path: "fuzz.txt", LineNumber: 0}
+		_ = det.Detect(content, meta)
+	})
+}
+
+// FuzzLoadRulesFromYAML_NoPanic verifies the YAML parser is safe against
+// arbitrary byte sequences — it must return an error or a RuleSet, never panic.
+func FuzzLoadRulesFromYAML_NoPanic(f *testing.F) {
+	// Seed with valid YAML and intentionally malformed inputs
+	f.Add([]byte("rules:\n  - id: test\n    pattern: 'abc'\n"))
+	f.Add([]byte("{invalid yaml"))
+	f.Add([]byte(""))
+	f.Add([]byte("null"))
+	f.Add([]byte(strings.Repeat("- ", 1000)))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// Either returns a result or an error — never panics
+		_, _ = LoadRulesFromYAML(data)
+	})
 }

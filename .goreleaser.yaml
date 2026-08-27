@@ -1,0 +1,147 @@
+# .goreleaser.yaml — leakscan release pipeline
+#
+# Triggered by: git tag v1.2.3 && git push origin v1.2.3
+# Requires (in GitHub Actions environment):
+#   - GITHUB_TOKEN (provided automatically by Actions)
+#   - cosign      (installed in release workflow)
+#   - syft        (installed by GoReleaser's sbom hook)
+#
+# Docs: https://goreleaser.com/customization/
+version: 2
+
+# ── Project metadata ────────────────────────────────────────
+project_name: leakscan
+
+before:
+  hooks:
+    # Ensure dependencies are tidy before releasing
+    - go mod tidy
+    # Run tests as a final gate before any artifact is built
+    - go test ./...
+
+# ── Build configuration ─────────────────────────────────────
+builds:
+  - id: leakscan
+    binary: leakscan
+    main: .
+    env:
+      - CGO_ENABLED=0   # Static binary — no libc dependency
+
+    # Stamp build metadata into the binary at link time
+    ldflags:
+      - -s -w
+      - -X 'leakscan/cmd.Version={{ .Version }}'
+      - -X 'leakscan/cmd.Commit={{ .Commit }}'
+      - -X 'leakscan/cmd.BuildDate={{ .Date }}'
+
+    # Cross-compile for all major platforms
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # Windows ARM64 is not a common target for CLI tools yet
+      - goos: windows
+        goarch: arm64
+
+# ── Archive / packaging ──────────────────────────────────────
+archives:
+  - id: default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      # Windows users expect .zip
+      - goos: windows
+        format: zip
+    # Include docs in each archive
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+# ── Checksums ────────────────────────────────────────────────
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+# ── SBOM generation (Software Bill of Materials) ─────────────
+#
+# Why SBOMs? Supply chain security. An SBOM lets downstream users
+# audit every Go module dependency for known CVEs (e.g., via grype).
+# GoReleaser uses 'syft' to generate CycloneDX JSON SBOMs per archive.
+sboms:
+  - artifacts: archive
+    documents:
+      - "{{ .ArtifactName }}.sbom.json"
+
+# ── Signing with cosign (keyless, GitHub OIDC) ───────────────
+#
+# Keyless signing means: NO long-lived private key to manage or rotate.
+# cosign uses Sigstore's Fulcio CA + GitHub OIDC token to issue a
+# short-lived certificate, then signs the artifact. The signature is
+# recorded in Rekor's append-only transparency log.
+#
+# Verification:
+#   cosign verify-blob leakscan_linux_amd64.tar.gz \
+#     --certificate leakscan_linux_amd64.tar.gz.pem \
+#     --signature   leakscan_linux_amd64.tar.gz.sig \
+#     --certificate-identity-regexp "https://github.com/*/leakscan/*" \
+#     --certificate-oidc-issuer    "https://token.actions.githubusercontent.com"
+signs:
+  - cmd: cosign
+    args:
+      - sign-blob
+      - --yes   # Non-interactive — required in CI
+      - --output-certificate=${certificate}
+      - --output-signature=${signature}
+      - ${artifact}
+    artifacts: checksum   # Sign the checksums file; it covers all archives
+    output: true
+
+# ── GitHub Release ───────────────────────────────────────────
+release:
+  github:
+    owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
+    name: leakscan
+  # Prepend generated changelog to any existing release notes
+  header: |
+    ## leakscan {{ .Version }}
+
+    Install with:
+    ```bash
+    # macOS / Linux
+    curl -sSfL https://raw.githubusercontent.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/leakscan/main/install.sh | sh
+
+    # Verify signature (requires cosign)
+    cosign verify-blob leakscan_{{ .Version }}_linux_amd64.tar.gz \
+      --certificate leakscan_{{ .Version }}_linux_amd64.tar.gz.pem \
+      --signature   leakscan_{{ .Version }}_linux_amd64.tar.gz.sig \
+      --certificate-identity-regexp "https://github.com/.*/leakscan/.*" \
+      --certificate-oidc-issuer    "https://token.actions.githubusercontent.com"
+    ```
+
+# ── Changelog ────────────────────────────────────────────────
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: "🚀 Features"
+      regexp: "^feat"
+      order: 0
+    - title: "🐛 Bug Fixes"
+      regexp: "^fix"
+      order: 1
+    - title: "📚 Documentation"
+      regexp: "^docs"
+      order: 2
+    - title: "🔧 Maintenance"
+      regexp: "^(chore|refactor|ci|build)"
+      order: 3
+    - title: "Other"
+      order: 999
+  filters:
+    exclude:
+      - "^Merge"
+      - "^typo"

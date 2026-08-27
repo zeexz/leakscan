@@ -1,0 +1,86 @@
+# golangci-lint configuration for leakscan
+# Run: golangci-lint run ./...
+# Docs: https://golangci-lint.run/usage/configuration/
+version: "2"
+
+run:
+  timeout: 5m
+  # Don't run in parallel to keep output readable during learning
+  concurrency: 4
+  # Include test files in most checks — they're first-class code here
+  tests: true
+
+linters:
+  # Start from a clean slate — only enable what we explicitly list
+  default: none
+  enable:
+    # ── Correctness ────────────────────────────────────────────
+    - errcheck        # Every returned error must be handled
+    - govet           # Reports suspicious constructs (shadowed vars, etc.)
+    - staticcheck     # Comprehensive static analysis (SA, S1, ST series)
+    - ineffassign     # Catch assignments to variables that are never used
+    - unused          # Dead code detection
+
+    # ── Security ───────────────────────────────────────────────
+    - gosec           # Security-focused checks (G101 hardcoded creds, G304 path traversal, …)
+
+    # ── Style & Idiomatic Go ───────────────────────────────────
+    - revive          # Faster, configurable replacement for golint
+    - gofmt           # Enforce gofmt formatting
+    - goimports       # Enforce proper import grouping
+
+    # ── Bugs & Pitfalls ────────────────────────────────────────
+    - bodyclose       # Ensure HTTP response bodies are always closed
+    - noctx           # Flag HTTP requests without context
+    - copylock        # Detect sync types copied by value
+    - exhaustive      # Ensure all enum variants are handled in switch
+
+linters-settings:
+  errcheck:
+    # Also check assignments: err = f() without checking err
+    check-blank: true
+
+  govet:
+    enable-all: true
+
+  gosec:
+    # We intentionally exclude G304 (file inclusion) in scanner code because
+    # leakscan's whole job is opening arbitrary user-supplied files.
+    excludes:
+      - G304
+
+  revive:
+    rules:
+      - name: exported
+        arguments:
+          - "disableStutteringCheck"
+      - name: var-naming
+      - name: unused-parameter
+      - name: error-return
+      - name: if-return
+
+  staticcheck:
+    checks:
+      - "all"
+      - "-ST1000"   # Don't enforce package-level doc comments on every package
+      - "-ST1003"   # Allow some name flexibility for test helpers
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 5
+
+  exclude-rules:
+    # Test files get a pass on some strict rules
+    - path: "_test\\.go"
+      linters:
+        - gosec
+        - errcheck   # t.Fatal/t.Error don't need error handling
+        - exhaustive
+
+    # The rules embed.go only contains go:embed — nothing to lint
+    - path: "rules/embed\\.go"
+      linters:
+        - unused
+
+  # Lines longer than this are flagged
+  # (120 is a pragmatic limit for a CLI project with long flag descriptions)
