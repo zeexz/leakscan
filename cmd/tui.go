@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -58,6 +59,19 @@ func runScanCmd(targetPath string) tea.Cmd {
 			return scanFinishedMsg{err: err}
 		}
 
+		// Load and merge custom rules if --rules-file is specified
+		if rulesFileFlag != "" {
+			customData, err := os.ReadFile(rulesFileFlag)
+			if err != nil {
+				return scanFinishedMsg{err: fmt.Errorf("failed to read custom rules file '%s': %w", rulesFileFlag, err)}
+			}
+			customRuleSet, err := detector.LoadRulesFromYAML(customData)
+			if err != nil {
+				return scanFinishedMsg{err: fmt.Errorf("failed to parse custom rules file '%s': %w", rulesFileFlag, err)}
+			}
+			ruleSet.Rules = append(ruleSet.Rules, customRuleSet.Rules...)
+		}
+
 		regexDet, err := detector.NewRegexDetector(ruleSet)
 		if err != nil {
 			return scanFinishedMsg{err: err}
@@ -69,19 +83,38 @@ func runScanCmd(targetPath string) tea.Cmd {
 		}
 
 		ignoreMatcher := config.NewIgnoreMatcher(ignoreFileFlag)
-		fsScanner := scanner.NewFilesystemScanner(targetPath, detectors, ignoreMatcher)
 
 		var all []detector.Finding
+
+		// Filesystem scan
+		fsScanner := scanner.NewFilesystemScanner(targetPath, detectors, ignoreMatcher)
 		findings, err := fsScanner.Scan(context.Background())
 		if err != nil {
 			return scanFinishedMsg{err: err}
 		}
 		all = append(all, findings...)
 
+		// Git history scan
 		if includeGitHistory {
 			gitScanner := scanner.NewGitScanner(targetPath, detectors, ignoreMatcher)
 			if gFindings, gErr := gitScanner.Scan(context.Background()); gErr == nil {
 				all = append(all, gFindings...)
+			}
+		}
+
+		// Shell history scan
+		if includeShell {
+			shellScanner := scanner.NewShellHistoryScanner(detectors)
+			if sFindings, sErr := shellScanner.Scan(context.Background()); sErr == nil {
+				all = append(all, sFindings...)
+			}
+		}
+
+		// Process environment scan
+		if includeProcess {
+			procScanner := scanner.NewProcessScanner(detectors)
+			if pFindings, pErr := procScanner.Scan(context.Background()); pErr == nil {
+				all = append(all, pFindings...)
 			}
 		}
 
@@ -281,5 +314,13 @@ var tuiCmd = &cobra.Command{
 }
 
 func init() {
+	// Register all scan-relevant flags on the TUI command so users can pass
+	// --include-git-history, --include-shell-history, etc. to 'leakscan tui'
+	tuiCmd.Flags().BoolVar(&includeGitHistory, "include-git-history", false, "Scan full git commit history in repository")
+	tuiCmd.Flags().BoolVar(&includeShell, "include-shell-history", false, "Scan local shell history (~/.bash_history, ~/.zsh_history)")
+	tuiCmd.Flags().BoolVar(&includeProcess, "include-process-env", false, "Scan running process environment variables")
+	tuiCmd.Flags().Float64Var(&entropyThreshold, "entropy-threshold", 3.8, "Shannon entropy threshold for high-entropy string detection (0 to disable)")
+	tuiCmd.Flags().StringVar(&ignoreFileFlag, "ignore-file", ".leakscanner-ignore", "Path to ignore file")
+	tuiCmd.Flags().StringVar(&rulesFileFlag, "rules-file", "", "Path to additional custom rules YAML file to merge with defaults")
 	rootCmd.AddCommand(tuiCmd)
 }

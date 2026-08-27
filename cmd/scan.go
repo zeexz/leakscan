@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 	"leakscan/internal/config"
 	"leakscan/internal/detector"
 	"leakscan/internal/report"
@@ -21,6 +23,7 @@ var (
 	formatFlag        string
 	ignoreFileFlag    string
 	failSeverityFlag  string
+	rulesFileFlag     string
 )
 
 var scanCmd = &cobra.Command{
@@ -37,6 +40,20 @@ var scanCmd = &cobra.Command{
 		ruleSet, err := detector.LoadRulesFromYAML(rules.DefaultPatternsYAML)
 		if err != nil {
 			return fmt.Errorf("failed to load default rules: %w", err)
+		}
+
+		// Load and merge custom rules if --rules-file is specified
+		if rulesFileFlag != "" {
+			customData, err := os.ReadFile(rulesFileFlag)
+			if err != nil {
+				return fmt.Errorf("failed to read custom rules file '%s': %w", rulesFileFlag, err)
+			}
+			customRuleSet, err := detector.LoadRulesFromYAML(customData)
+			if err != nil {
+				return fmt.Errorf("failed to parse custom rules file '%s': %w", rulesFileFlag, err)
+			}
+			ruleSet.Rules = append(ruleSet.Rules, customRuleSet.Rules...)
+			fmt.Fprintf(os.Stderr, "✔ Loaded %d custom rule(s) from %s\n", len(customRuleSet.Rules), rulesFileFlag)
 		}
 
 		regexDet, err := detector.NewRegexDetector(ruleSet)
@@ -71,16 +88,27 @@ var scanCmd = &cobra.Command{
 			scanners = append(scanners, scanner.NewProcessScanner(detectors))
 		}
 
-		// 4. Run Scan
+		// 4. Run Scan (parallel execution)
 		ctx := context.Background()
 		var allFindings []detector.Finding
+		var mu sync.Mutex
 
+		g, gctx := errgroup.WithContext(ctx)
 		for _, s := range scanners {
-			findings, err := s.Scan(ctx)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Scanner '%s' returned error: %v\n", s.Name(), err)
-			}
-			allFindings = append(allFindings, findings...)
+			g.Go(func() error {
+				findings, err := s.Scan(gctx)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Scanner '%s' returned error: %v\n", s.Name(), err)
+				}
+				mu.Lock()
+				allFindings = append(allFindings, findings...)
+				mu.Unlock()
+				return nil // Don't propagate — individual scanner errors are warnings
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			return fmt.Errorf("scan failed: %w", err)
 		}
 
 		// 5. Deduplicate findings by (source, location, redacted value)
@@ -160,6 +188,7 @@ func init() {
 	scanCmd.Flags().StringVar(&formatFlag, "format", "terminal", "Output format: 'terminal' or 'json'")
 	scanCmd.Flags().StringVar(&ignoreFileFlag, "ignore-file", ".leakscanner-ignore", "Path to ignore file")
 	scanCmd.Flags().StringVar(&failSeverityFlag, "fail-severity", "none", "Exit non-zero if findings exist at or above severity ('critical', 'high', 'medium', 'none')")
+	scanCmd.Flags().StringVar(&rulesFileFlag, "rules-file", "", "Path to additional custom rules YAML file to merge with defaults")
 
 	rootCmd.AddCommand(scanCmd)
 }
