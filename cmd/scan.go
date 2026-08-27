@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 	"leakscan/internal/config"
 	"leakscan/internal/detector"
 	"leakscan/internal/report"
@@ -71,16 +73,27 @@ var scanCmd = &cobra.Command{
 			scanners = append(scanners, scanner.NewProcessScanner(detectors))
 		}
 
-		// 4. Run Scan
+		// 4. Run Scan (parallel execution)
 		ctx := context.Background()
 		var allFindings []detector.Finding
+		var mu sync.Mutex
 
+		g, gctx := errgroup.WithContext(ctx)
 		for _, s := range scanners {
-			findings, err := s.Scan(ctx)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Scanner '%s' returned error: %v\n", s.Name(), err)
-			}
-			allFindings = append(allFindings, findings...)
+			g.Go(func() error {
+				findings, err := s.Scan(gctx)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Scanner '%s' returned error: %v\n", s.Name(), err)
+				}
+				mu.Lock()
+				allFindings = append(allFindings, findings...)
+				mu.Unlock()
+				return nil // Don't propagate — individual scanner errors are warnings
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			return fmt.Errorf("scan failed: %w", err)
 		}
 
 		// 5. Deduplicate findings by (source, location, redacted value)
