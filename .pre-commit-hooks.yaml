@@ -1,0 +1,7 @@
+- id: leakscan
+  name: leakscan
+  description: Scan files and repository for leaked secrets and credentials
+  entry: leakscan scan --fail-severity high
+  language: golang
+  pass_filenames: false
+  types: [text]

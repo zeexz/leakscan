@@ -8,13 +8,13 @@
     user PATH so you can run 'leakscan' from any terminal.
 
 .EXAMPLE
-    iex (irm https://raw.githubusercontent.com/YOUR_USERNAME/leakscan/main/install.ps1)
+    iex (irm https://raw.githubusercontent.com/zeexz/secret-leak-scanner/main/install.ps1)
 #>
 
 $ErrorActionPreference = "Stop"
 
 # ── Configuration ─────────────────────────────────────────────────
-$REPO          = "YOUR_USERNAME/leakscan"          # ← Replace with your GitHub owner/repo
+$REPO          = "zeexz/secret-leak-scanner"
 $BINARY_NAME   = "leakscan.exe"
 $INSTALL_DIR   = Join-Path $env:USERPROFILE ".leakscan\bin"
 $GITHUB_API    = "https://api.github.com/repos/$REPO/releases/latest"
