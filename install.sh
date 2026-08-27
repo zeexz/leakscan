@@ -3,7 +3,7 @@
 # LeakScan Installer — Linux & macOS
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/leakscan/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/zeexz/secret-leak-scanner/main/install.sh | bash
 #
 # Environment variables:
 #   LEAKSCAN_INSTALL_DIR  Override install directory (default: ~/.leakscan/bin)
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────
-REPO="YOUR_USERNAME/leakscan"           # ← Replace with your GitHub owner/repo
+REPO="zeexz/secret-leak-scanner"
 BINARY_NAME="leakscan"
 INSTALL_DIR="${LEAKSCAN_INSTALL_DIR:-$HOME/.leakscan/bin}"
 GITHUB_API="https://api.github.com/repos/$REPO/releases/latest"
