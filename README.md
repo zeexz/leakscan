@@ -921,7 +921,3 @@ This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for f
 If you discover a potential security flaw in `leakscan` or its redaction engine, please **do not** open a public issue. Email security reports directly to prabashwaragihan7@gmail.com or submit a private security advisory on GitHub.
 
 ---
-
-<p align="center">
-  <b>Built with Go, Charm BubbleTea & LipGloss</b>
-</p>
