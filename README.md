@@ -1,6 +1,6 @@
 #  `leakscan` — Enterprise Secrets & Credential Leak Scanner
 
-[![CI](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/ci.yml)
+[![CI](https://github.com/zeexz/leakscan/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/ci.yml)
 [![Release](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/release.yml/badge.svg)](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/release.yml)
 [![Go Version](https://img.shields.io/badge/go-1.22%2B-00ADD8.svg?style=flat-square&logo=go)](https://golang.org)
 [![golangci-lint](https://img.shields.io/badge/golangci--lint-passing-success.svg?style=flat-square&logo=go)](https://golangci-lint.run)
