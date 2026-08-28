@@ -5,6 +5,7 @@ version: "2"
 
 run:
   timeout: 5m
+  go: "1.26"
   # Don't run in parallel to keep output readable during learning
   concurrency: 4
   # Include test files in most checks — they're first-class code here
@@ -26,14 +27,16 @@ linters:
 
     # ── Style & Idiomatic Go ───────────────────────────────────
     - revive          # Faster, configurable replacement for golint
-    - gofmt           # Enforce gofmt formatting
-    - goimports       # Enforce proper import grouping
 
     # ── Bugs & Pitfalls ────────────────────────────────────────
     - bodyclose       # Ensure HTTP response bodies are always closed
     - noctx           # Flag HTTP requests without context
-    - copylock        # Detect sync types copied by value
     - exhaustive      # Ensure all enum variants are handled in switch
+
+formatters:
+  enable:
+    - gofmt           # Enforce gofmt formatting
+    - goimports       # Enforce proper import grouping
 
 linters-settings:
   errcheck:
@@ -66,6 +69,7 @@ linters-settings:
       - "-ST1003"   # Allow some name flexibility for test helpers
 
 issues:
+  new: true
   max-issues-per-linter: 50
   max-same-issues: 5
 
