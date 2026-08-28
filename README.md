@@ -1,7 +1,7 @@
-#  `leakscan` — Enterprise Secrets & Credential Leak Scanner
+#  `leakscan` — Local-First Secret & Credential Leak Scanner
 
-[![CI](https://github.com/zeexz/leakscan/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/ci.yml)
-[![Release](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/release.yml/badge.svg)](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/release.yml)
+[![CI](https://github.com/zeexz/secret-leak-scanner/actions/workflows/ci.yml/badge.svg)](https://github.com/zeexz/secret-leak-scanner/actions/workflows/ci.yml)
+[![Release](https://github.com/zeexz/secret-leak-scanner/actions/workflows/release.yml/badge.svg)](https://github.com/zeexz/secret-leak-scanner/actions/workflows/release.yml)
 [![Go Version](https://img.shields.io/badge/go-1.22%2B-00ADD8.svg?style=flat-square&logo=go)](https://golang.org)
 [![golangci-lint](https://img.shields.io/badge/golangci--lint-passing-success.svg?style=flat-square&logo=go)](https://golangci-lint.run)
 [![GoReleaser](https://img.shields.io/badge/goreleaser-enabled-blue.svg?style=flat-square)](https://goreleaser.com)
@@ -10,7 +10,9 @@
 [![Signed](https://img.shields.io/badge/signed-cosign%20keyless-orange.svg?style=flat-square)](https://docs.sigstore.dev/cosign/overview/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](CONTRIBUTING.md)
 
-**`leakscan`** is a high-performance, enterprise-grade security CLI and interactive TUI written in Go. Designed for DevSecOps teams, security auditors, and engineers, it scans local filesystems, full Git commit histories, shell logs, and active process environments to intercept leaked credentials, API tokens, cloud keys, and private certificates before they reach remote repositories or public exposure.
+**`leakscan`** is a fast, local-first CLI and interactive TUI written in Go for finding leaked credentials, API keys, tokens, and private certificates. It scans local filesystems, full Git commit histories, shell history files, and active process environments, so you can catch secrets before they reach a remote repository or get baked into a shared environment.
+
+It's a young project (early releases, small user base) — see [Project Status](#-project-status) below before relying on it for anything critical.
 
 ---
 
@@ -32,7 +34,8 @@
 
 ## Table of Contents
 
-- [Executive Summary & Core Highlights](#-executive-summary--core-highlights)
+- [Project Status](#-project-status)
+- [Core Highlights](#-core-highlights)
 - [Architecture & Detection Pipeline](#-architecture--detection-pipeline)
 - [Multi-Vector Detection Engines](#-multi-vector-detection-engines)
 - [Quick Start & Installation](#-quick-start--installation)
@@ -45,7 +48,7 @@
   - [`tui` Interactive Dashboard](#2-leakscan-tui-path)
   - [`watch` Real-Time Monitor](#3-leakscan-watch-path)
   - [`init` Pre-Commit Setup](#4-leakscan-init)
-- [Enterprise Configuration & Custom Rules](#-enterprise-configuration--custom-rules)
+- [Configuration & Custom Rules](#-configuration--custom-rules)
   - [Configuring `.leakscanner-ignore`](#configuring-leakscanner-ignore)
   - [Custom Pattern YAML Schema](#custom-pattern-yaml-schema)
   - [Shannon Entropy Thresholding](#shannon-entropy-thresholding)
@@ -54,7 +57,7 @@
   - [GitLab CI/CD Pipeline](#gitlab-cicd-pipeline)
   - [Git Pre-Commit Hook Enforcement](#git-pre-commit-hook-enforcement)
 - [Threat Model & Security Boundaries](#-threat-model--security-boundaries)
-- [Compliance & Audit Standards](#-compliance--audit-standards)
+- [Relevance to Compliance Frameworks](#-relevance-to-compliance-frameworks)
 - [Performance & Benchmarks](#-performance--benchmarks)
 - [Troubleshooting & FAQ](#-troubleshooting--faq)
 - [Writing a Custom Detection Rule](#-writing-a-custom-detection-rule)
@@ -66,25 +69,29 @@
 
 ---
 
-##  Executive Summary & Core Highlights
+## 🚧 Project Status
 
-Unintended credential disclosure accounts for nearly **34% of enterprise data breaches**. `leakscan` addresses this attack vector by offering a zero-dependency, zero-telemetry credential interception framework built for speed and strict privacy.
+`leakscan` is early-stage and under active development. The core scan/TUI/watch pipeline works and is covered by unit + fuzz tests, but it hasn't been used at scale, hasn't had an external security review, and false-positive rates haven't been formally benchmarked yet (only scan speed has — see [Performance & Benchmarks](#-performance--benchmarks)).
 
-### Why Security & Engineering Teams Choose `leakscan`
+If you're evaluating it, a reasonable path is: run it against a disposable repo first, check how noisy the default entropy threshold is for your codebase, and only wire it into a required CI gate once you're comfortable with the signal-to-noise ratio. Issues and PRs — especially false-positive reports — are welcome.
 
-| Feature | `leakscan` Capability | Enterprise Value |
+---
+
+##  Core Highlights
+
+| Feature | `leakscan` Capability | Why it's useful |
 | :--- | :--- | :--- |
-|  **Zero Secret Exposure** | In-memory masking before output (`AKIA****************ABCD`). | Guarantees logs, terminals, and reports never inadvertently leak raw credentials. |
-|  **100% Air-Gapped** | Zero network HTTP requests, zero telemetry, zero analytics tracking. | Safe for use in strict military, financial, and air-gapped confidential compute environments. |
-|  **Multi-Surface Scan** | Inspects Filesystem, Git History, Shell History (`~/.bash_history`), and Process ENV. | Intercepts secrets across all local operational vectors—not just checked-in source code. |
-|  **Parallel Concurrency** | Non-blocking concurrent scanning across surfaces via `errgroup`. | Slashes audit duration by running independent scan engines simultaneously in parallel. |
-|  **Dual-Engine Detection** | Regex pattern matching + Shannon Entropy ($H(X) \ge 3.8$) mathematical scoring. | Intercepts both vendor-standard key formats and custom high-randomness secret tokens. |
-|  **Custom Rules Engine** | Dynamic rule injection via `--rules-file` merging with embedded defaults. | Enforces custom corporate secrets, proprietary token schemes, and internal keys. |
-|  **Live Watcher** | Cross-platform polling watcher (3 s interval) for deterministic behaviour on all OSes. | Real-time secret detection on file save without platform-specific event driver quirks. |
-|  **LazyVim TUI** | Terminal UI styled with TokyoNight color palettes using Charm `bubbletea` & `lipgloss`. | Enhances developer experience (DX) with intuitive keyboard-driven alert triage. |
-|  **CI/CD Enforcement** | Configurable `--fail-severity` thresholding and deterministic JSON schemas. | Blocks pull requests and commits carrying secrets at build time. |
-|  **Supply-Chain Security** | GoReleaser + cosign keyless signing + CycloneDX SBOMs on every release. | Users can cryptographically verify every downloaded binary via Sigstore/Rekor. |
-|  **Task Automation** | `Makefile` with `build`, `test`, `test-fuzz`, `lint`, `coverage` targets. | Industry-standard developer workflow — one command for every common operation. |
+|  **Redacted Output** | In-memory masking before anything is printed (`AKIA****************ABCD`). | Findings can be shared in logs, terminals, or reports without printing the raw secret. |
+|  **No Network Calls** | Zero outbound HTTP requests, no telemetry, no analytics. | Safe to run in restricted, offline, or otherwise locked-down environments. |
+|  **Multi-Surface Scan** | Inspects Filesystem, Git History, Shell History (`~/.bash_history`), and Process ENV. | Catches secrets outside checked-in source too — shell history and live env vars are common leak vectors people forget about. |
+|  **Parallel Concurrency** | Non-blocking concurrent scanning across surfaces via `errgroup`. | Multiple scan surfaces run at once instead of sequentially. |
+|  **Dual-Engine Detection** | Regex pattern matching + Shannon Entropy ($H(X) \ge 3.8$) scoring. | Catches both known key formats (AWS, GitHub, Slack, …) and unlabeled high-randomness tokens. |
+|  **Custom Rules Engine** | Rule injection via `--rules-file`, merged with embedded defaults. | Add detection for internal/proprietary token formats without forking. |
+|  **Live Watcher** | Cross-platform polling watcher (3 s interval). | Re-scans on file save without depending on OS-specific filesystem event APIs. |
+|  **LazyVim TUI** | Terminal UI styled with TokyoNight, built on Charm `bubbletea` & `lipgloss`. | Keyboard-driven triage of findings instead of scrolling raw terminal output. |
+|  **CI/CD Enforcement** | Configurable `--fail-severity` thresholding and a JSON output format. | Can fail a PR/build on findings at or above a chosen severity. |
+|  **Supply-Chain Tooling** | GoReleaser + cosign keyless signing + CycloneDX SBOMs on every release. | Downloaded binaries can be verified against their build provenance via Sigstore/Rekor. |
+|  **Task Automation** | `Makefile` with `build`, `test`, `test-fuzz`, `lint`, `coverage` targets. | One command for each common dev workflow step. |
 
 ---
 
@@ -138,7 +145,7 @@ flowchart TD
 ## 🔬 Multi-Vector Detection Engines
 
 ### 1. Deterministic Pattern Engine (Regex)
-Built-in rule definitions target industry-standard token signatures:
+Built-in rule definitions target common token signatures:
 - **AWS Credentials**: IAM Access Key IDs (`AKIA[0-9A-Z]{16}`), Secret Access Keys (`[A-Za-z0-9/+=]{40}`)
 - **GitHub Access Tokens**: Fine-grained and classic personal tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`)
 - **Slack API Tokens**: Bot, User, and App credentials (`xox[baprs]-[0-9a-zA-Z]{10,48}`)
@@ -153,9 +160,11 @@ $$H(X) = -\sum_{i=1}^{n} P(x_i) \log_2 P(x_i)$$
 
 Where $P(x_i)$ represents the frequency probability of character $x_i$. Strings exceeding $H(X) \ge 3.8$ with key assignment context trigger high-entropy alerts while filtering out common placeholders (`CHANGEME`, `your-api-key-here`).
 
+Entropy detection is inherently probabilistic — expect some false positives on things like hashes, minified code, or base64 blobs unrelated to secrets. Tune `--entropy-threshold` or use `.leakscanner-ignore` to cut noise for your codebase.
+
 ### 3. Surface Scanner Capabilities
 - **Filesystem Auditor**: Traverses project directories recursively. Detects insecure file permissions (e.g., world-readable `.env` files).
-- **Git Commit Inspector**: Uses `go-git` to walk all commit objects in the repository tree. Intercepts secrets buried in historical commits, even if deleted in `HEAD`.
+- **Git Commit Inspector**: Uses `go-git` to walk all commit objects in the repository tree. Finds secrets buried in historical commits, even if deleted in `HEAD`.
 - **Shell Log Inspector**: Scans `~/.bash_history`, `~/.zsh_history`, and `$HISTFILE` to catch accidentally executed `export API_KEY=...` lines.
 - **Process Environment Auditor**: Scans live process environment variables visible to the executing user context.
 
@@ -168,7 +177,7 @@ Where $P(x_i)$ represents the frequency probability of character $x_i$. Strings 
 Install directly to `~\.leakscan\bin` and automatically update user `PATH`:
 
 ```powershell
-iex (irm https://raw.githubusercontent.com/YOUR_USERNAME/leakscan/main/install.ps1)
+iex (irm https://raw.githubusercontent.com/zeexz/secret-leak-scanner/main/install.ps1)
 ```
 
 ### cURL Bash One-Liner (Linux / macOS)
@@ -176,7 +185,7 @@ iex (irm https://raw.githubusercontent.com/YOUR_USERNAME/leakscan/main/install.p
 Auto-detect architecture (amd64 / arm64), download the latest release binary, and install to `/usr/local/bin` or `~/.local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/leakscan/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/zeexz/secret-leak-scanner/main/install.sh | bash
 ```
 
 ### Building from Source
@@ -185,8 +194,8 @@ Requires **Go 1.22+**:
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/leakscan.git
-cd leakscan
+git clone https://github.com/zeexz/secret-leak-scanner.git
+cd secret-leak-scanner
 
 # Build with version/commit/date stamped into binary (recommended)
 make build
@@ -329,7 +338,7 @@ leakscan init
 
 ---
 
-## ⚙️ Enterprise Configuration & Custom Rules
+## ⚙️ Configuration & Custom Rules
 
 ### Configuring `.leakscanner-ignore`
 
@@ -521,7 +530,7 @@ fi
 - **Dangling Commit Leaks**: Scans historical commits even after credentials have been edited out or deleted in working directories.
 - **Interactive Shell Leaks**: Identifies `export` statements logged in local shell history.
 - **World-Readable Credentials**: Audits OS file permissions (e.g., alerts on `chmod 644 .env`).
-- **Output Secret Protection**: Ensures zero raw secret strings reach stdout, terminal renders, or disk reports.
+- **Output Secret Protection**: Aims to keep raw secret strings out of stdout, terminal renders, and disk reports. This is a best-effort control, not a formally verified guarantee — see [Project Status](#-project-status).
 
 ### Out-of-Scope Boundaries
 - **Exfiltrated Credential Status**: `leakscan` identifies local exposure; it cannot detect whether an attacker has already exploited or exfiltrated the key.
@@ -530,14 +539,16 @@ fi
 
 ---
 
-## 📑 Compliance & Audit Standards
+## 📑 Relevance to Compliance Frameworks
 
-`leakscan` helps organizations meet strict technical controls required by security frameworks:
+`leakscan` is not certified against, and does not by itself satisfy, any compliance framework. What it *can* do is act as one technical control among several that organizations use when working toward requirements like these:
 
-- **SOC 2 Type II (CC6.1, CC6.6, CC7.1)**: Enforces access controls and prevents unauthorized storage of production credentials in developer workspaces.
-- **PCI-DSS v4.0 (Requirement 6.3.2)**: Mandates software development controls to prevent hardcoded secret keys and authentication tokens in custom code.
-- **ISO/IEC 27001:2022 (Control A.8.28)**: Requires secure coding practices and credential protection across the software development lifecycle (SDLC).
-- **HIPAA Security Rule (§ 164.312(a)(2)(iv))**: Protects authorization mechanisms by identifying unencrypted credentials in local processing environments.
+- **SOC 2** — controls around restricting access to production credentials in developer workspaces.
+- **PCI-DSS** — secure development requirements that call for avoiding hardcoded secrets and authentication data in code.
+- **ISO/IEC 27001** — secure coding and credential-handling practices across the SDLC.
+- **HIPAA Security Rule** — safeguards around authentication credentials in systems that touch PHI.
+
+If you're using `leakscan` as part of an audit trail, treat its JSON output as supporting evidence to bring to your auditor or compliance lead — not as a substitute for their sign-off.
 
 ---
 
@@ -551,6 +562,8 @@ Benchmarked on an Apple M2 Max (12-core CPU, 32GB RAM) scanning a 50,000-file re
 | **Git Commit Tree** | 10,000 commits | `2.84s` | `58.1 MB` |
 | **Shell History** | 25,000 log lines | `0.18s` | `12.2 MB` |
 | **Process Environment** | 120 running PIDs | `0.09s` | `8.4 MB` |
+
+These are speed/memory numbers from a single benchmark run on one machine and one synthetic repo — treat them as directional, not a guarantee for your environment. Detection accuracy (false-positive / false-negative rate) hasn't been formally benchmarked yet; if you run this against a real codebase, [issue reports](https://github.com/zeexz/secret-leak-scanner/issues) on noisy or missed findings are genuinely useful.
 
 ---
 
@@ -590,7 +603,7 @@ to learn how production security tooling is extended safely.
 
 ### Why write custom rules?
 
-Built-in rules cover universal patterns (AWS, GitHub, Slack …). Your
+Built-in rules cover common patterns (AWS, GitHub, Slack …). Your
 organisation may have **internal API key formats**, custom token prefixes, or
 proprietary credential naming conventions that only you know about. Custom
 rules let you add those detections without forking the project.
@@ -819,7 +832,7 @@ ok  	leakscan/internal/detector	0.042s
 
 ### Step 5 — Merge into the default rule set (open a PR)
 
-If your rule catches a **universal** credential type (not org-specific), consider
+If your rule catches a **common** credential type (not org-specific), consider
 contributing it to `rules/default-patterns.yaml`:
 
 1. Add the rule to [`rules/default-patterns.yaml`](rules/default-patterns.yaml)
@@ -905,10 +918,10 @@ This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for f
 
 ### Security Vulnerability Disclosure
 
-If you discover a potential security flaw in `leakscan` or its redaction engine, please **do not** open a public issue. Email security reports directly to security@yourdomain.com or submit a private security advisory on GitHub.
+If you discover a potential security flaw in `leakscan` or its redaction engine, please **do not** open a public issue. Email security reports directly to prabashwaragihan7@gmail.com or submit a private security advisory on GitHub.
 
 ---
 
 <p align="center">
-  <b>Built with Go, Charm BubbleTea & LipGloss • Enforcing Zero-Leak Code Hygiene</b>
+  <b>Built with Go, Charm BubbleTea & LipGloss</b>
 </p>
