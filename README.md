@@ -1,4 +1,4 @@
-# ⚡ `leakscan` — Enterprise Secrets & Credential Leak Scanner
+#  `leakscan` — Enterprise Secrets & Credential Leak Scanner
 
 [![CI](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/ci.yml)
 [![Release](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/release.yml/badge.svg)](https://github.com/YOUR_USERNAME/leakscan/actions/workflows/release.yml)
