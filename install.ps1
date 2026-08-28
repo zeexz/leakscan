@@ -1,196 +1,168 @@
 <#
 .SYNOPSIS
-    Install leakscan CLI on Windows via PowerShell one-liner.
+  Improved leakscan PowerShell installer with verification and options.
 
 .DESCRIPTION
-    Downloads the latest leakscan release from GitHub Releases,
-    installs it to ~\.leakscan\bin, and adds that directory to your
-    user PATH so you can run 'leakscan' from any terminal.
-
-.EXAMPLE
-    iex (irm https://raw.githubusercontent.com/zeexz/secret-leak-scanner/main/install.ps1)
+  Downloads a release from GitHub Releases and installs the leakscan binary
+  to %USERPROFILE%\.leakscan\bin by default. Supports pinned tags, dry-run,
+  uninstall, checksum verification, optional cosign verification, and best-effort
+  PATH update. Run with -Help for options.
 #>
+param(
+  [string]$Repo = "zeexz/leakscan",
+  [string]$Tag = "latest",
+  [string]$InstallDir = "$env:USERPROFILE\.leakscan\bin",
+  [switch]$DryRun,
+  [switch]$Uninstall,
+  [switch]$NoPath,
+  [switch]$VerifyCosign,
+  [switch]$Quiet
+)
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
 
-# ── Configuration ─────────────────────────────────────────────────
-$REPO          = "zeexz/secret-leak-scanner"
-$BINARY_NAME   = "leakscan.exe"
-$INSTALL_DIR   = Join-Path $env:USERPROFILE ".leakscan\bin"
-$GITHUB_API    = "https://api.github.com/repos/$REPO/releases/latest"
-# ──────────────────────────────────────────────────────────────────
+function Write-Info([string]$m) { if (-not $Quiet) { Write-Host "[info] $m" -ForegroundColor Cyan } }
+function Write-Step([string]$m) { if (-not $Quiet) { Write-Host "  → $m" -ForegroundColor DarkGray } }
+function Write-Ok([string]$m) { if (-not $Quiet) { Write-Host "[ok] $m" -ForegroundColor Green } }
+function Write-Warn([string]$m) { Write-Host "[warn] $m" -ForegroundColor Yellow }
+function Write-Err([string]$m) { Write-Host "[error] $m" -ForegroundColor Red; exit 1 }
 
-function Write-Banner {
-    $purple = "`e[35m"
-    $cyan   = "`e[36m"
-    $blue   = "`e[34m"
-    $reset  = "`e[0m"
-    $bold   = "`e[1m"
-
-    Write-Host ""
-    Write-Host "  ${bold}${purple}⚡ LEAKSCAN INSTALLER ⚡${reset}"
-    Write-Host "  ${cyan}Secrets & Credential Leak Scanner${reset}"
-    Write-Host "  ${blue}────────────────────────────────────${reset}"
-    Write-Host ""
+function Get-Architecture() {
+  $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+  switch ($arch) {
+    'X64' { 'amd64' }
+    'Arm64' { 'arm64' }
+    'X86' { '386' }
+    default { Write-Err "Unsupported arch: $arch" }
+  }
 }
 
-function Get-Architecture {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
-    switch ($arch) {
-        "X64"   { return "amd64" }
-        "Arm64" { return "arm64" }
-        "X86"   { return "386" }
-        default {
-            Write-Error "Unsupported architecture: $arch"
-            exit 1
-        }
-    }
+function Get-LatestRelease([string]$Repo, [string]$Tag) {
+  if ($Tag -eq 'latest') {
+    $url = "https://api.github.com/repos/$Repo/releases/latest"
+  } else {
+    $url = "https://api.github.com/repos/$Repo/releases/tags/$Tag"
+  }
+  $headers = @{ 'Accept' = 'application/vnd.github.v3+json' }
+  if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
+  try { Invoke-RestMethod -Uri $url -Headers $headers -UseBasicParsing } catch { Write-Err "Failed to fetch release metadata: $_" }
 }
 
-function Get-LatestRelease {
-    Write-Host "  → Fetching latest release from GitHub..." -ForegroundColor DarkGray
-
-    try {
-        $headers = @{ "Accept" = "application/vnd.github.v3+json" }
-        if ($env:GITHUB_TOKEN) {
-            $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
-        }
-
-        $release = Invoke-RestMethod -Uri $GITHUB_API -Headers $headers
-        return $release
-    }
-    catch {
-        Write-Error "Failed to fetch latest release. Check your network connection and repo URL."
-        Write-Error "API URL: $GITHUB_API"
-        Write-Error "Error: $_"
-        exit 1
-    }
+function Find-Asset($release, $os, $arch) {
+  # prefer matching os+arch in name, otherwise any asset with 'leakscan' in name
+  foreach ($a in $release.assets) {
+    if ($a.name -match "$os" -and $a.name -match "$arch" -and $a.name -match '\.(zip|tar.gz|exe)$') { return $a }
+  }
+  foreach ($a in $release.assets) { if ($a.name -match 'leakscan' -and $a.name -match '\.(zip|tar.gz|exe)$') { return $a } }
+  return $null
 }
 
-function Find-Asset {
-    param (
-        [Parameter(Mandatory)] $Release,
-        [Parameter(Mandatory)] [string] $Arch
-    )
-
-    $pattern = "leakscan.*windows.*${Arch}"
-
-    foreach ($asset in $Release.assets) {
-        if ($asset.name -match $pattern -and $asset.name -match '\.(zip|exe)$') {
-            return $asset
-        }
-    }
-
-    # Fallback: try to find any windows asset
-    foreach ($asset in $Release.assets) {
-        if ($asset.name -match "windows" -and $asset.name -match '\.(zip|exe)$') {
-            return $asset
-        }
-    }
-
-    Write-Error "No compatible asset found for Windows $Arch in release $($Release.tag_name)"
-    Write-Error "Available assets:"
-    foreach ($asset in $Release.assets) {
-        Write-Error "  - $($asset.name)"
-    }
-    exit 1
+function Find-VerificationAssets($release, $assetName) {
+  $sig = $null; $cert = $null; $checksum = $null
+  foreach ($a in $release.assets) {
+    if ($a.name -match [regex]::Escape($assetName) -and $a.name -match '\.sha256') { $checksum = $a }
+    if ($a.name -match [regex]::Escape($assetName) -and $a.name -match '\.sig$') { $sig = $a }
+    if ($a.name -match [regex]::Escape($assetName) -and $a.name -match '\.(pem|crt)$') { $cert = $a }
+  }
+  return @{ checksum = $checksum; sig = $sig; cert = $cert }
 }
 
-function Install-LeakScan {
-    Write-Banner
-
-    $arch = Get-Architecture
-    Write-Host "  ● Platform:     Windows ($arch)" -ForegroundColor Cyan
-    Write-Host "  ● Install Dir:  $INSTALL_DIR" -ForegroundColor Cyan
-    Write-Host ""
-
-    # Step 1: Get latest release info
-    $release = Get-LatestRelease
-    $version = $release.tag_name
-    Write-Host "  ● Version:      $version" -ForegroundColor Green
-    Write-Host ""
-
-    # Step 2: Find the correct binary asset
-    $asset = Find-Asset -Release $release -Arch $arch
-    Write-Host "  → Downloading $($asset.name)..." -ForegroundColor DarkGray
-
-    # Step 3: Create install directory
-    if (-not (Test-Path $INSTALL_DIR)) {
-        New-Item -ItemType Directory -Path $INSTALL_DIR -Force | Out-Null
-    }
-
-    # Step 4: Download to a temp location
-    $tempDir  = Join-Path ([System.IO.Path]::GetTempPath()) "leakscan-install"
-    $tempFile = Join-Path $tempDir $asset.name
-
-    if (Test-Path $tempDir) {
-        Remove-Item -Recurse -Force $tempDir
-    }
-    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-
-    $headers = @{}
-    if ($env:GITHUB_TOKEN) {
-        $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
-    }
-    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempFile -Headers $headers -UseBasicParsing
-
-    # Step 5: Extract or copy binary
-    $destBinary = Join-Path $INSTALL_DIR $BINARY_NAME
-
-    if ($asset.name -match '\.zip$') {
-        Write-Host "  → Extracting archive..." -ForegroundColor DarkGray
-        Expand-Archive -Path $tempFile -DestinationPath $tempDir -Force
-
-        # Find the .exe inside the extracted archive
-        $exe = Get-ChildItem -Path $tempDir -Recurse -Filter "*.exe" | Select-Object -First 1
-        if (-not $exe) {
-            Write-Error "No .exe found inside the downloaded archive."
-            exit 1
-        }
-        Copy-Item -Path $exe.FullName -Destination $destBinary -Force
-    }
-    else {
-        # Direct .exe download
-        Copy-Item -Path $tempFile -Destination $destBinary -Force
-    }
-
-    # Cleanup temp
-    Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
-
-    # Step 6: Add to PATH if not already present
-    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-    if ($userPath -notlike "*$INSTALL_DIR*") {
-        Write-Host "  → Adding to user PATH..." -ForegroundColor DarkGray
-        [Environment]::SetEnvironmentVariable("PATH", "$userPath;$INSTALL_DIR", "User")
-        $env:PATH = "$env:PATH;$INSTALL_DIR"
-    }
-
-    # Step 7: Verify installation
-    Write-Host ""
-    Write-Host "  ✅ leakscan $version installed successfully!" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "  ● Binary:  $destBinary" -ForegroundColor Cyan
-    Write-Host ""
-
-    # Quick verify
-    try {
-        $versionOutput = & $destBinary --version 2>&1
-        Write-Host "  ● Verify:  $versionOutput" -ForegroundColor Green
-    }
-    catch {
-        Write-Host "  ⚠ Could not verify. You may need to restart your terminal." -ForegroundColor Yellow
-    }
-
-    Write-Host ""
-    Write-Host "  ┌─────────────────────────────────────────────────┐" -ForegroundColor DarkGray
-    Write-Host "  │  Restart your terminal, then run:               │" -ForegroundColor DarkGray
-    Write-Host "  │                                                 │" -ForegroundColor DarkGray
-    Write-Host "  │    leakscan scan .                              │" -ForegroundColor Cyan
-    Write-Host "  │    leakscan tui                                 │" -ForegroundColor Cyan
-    Write-Host "  │                                                 │" -ForegroundColor DarkGray
-    Write-Host "  └─────────────────────────────────────────────────┘" -ForegroundColor DarkGray
-    Write-Host ""
+function Verify-Checksum($checksumUrl, $filePath) {
+  $tmp = [System.IO.Path]::GetTempFileName()
+  try { Invoke-WebRequest -Uri $checksumUrl -OutFile $tmp -UseBasicParsing } catch { Write-Warn "Failed to download checksum"; return $false }
+  $expected = Get-Content $tmp | Select-Object -First 1 | ForEach-Object { ($_ -split '\s+')[0] }
+  if (-not $expected) { Write-Warn "Checksum file empty or unparsable"; return $false }
+  $hash = Get-FileHash -Path $filePath -Algorithm SHA256
+  if ($hash.Hash -eq $expected) { Write-Ok "Checksum OK"; return $true } else { Write-Err "Checksum mismatch: expected $expected, got $($hash.Hash)" }
 }
 
-# Run installer
-Install-LeakScan
+function Verify-Cosign($sigUrl, $certUrl, $filePath) {
+  if (-not (Get-Command cosign -ErrorAction SilentlyContinue)) { Write-Warn "cosign not installed"; return $false }
+  $tmpDir = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ([guid]::NewGuid().ToString())
+  New-Item -ItemType Directory -Path $tmpDir | Out-Null
+  try {
+    $sigFile = Join-Path $tmpDir 'asset.sig'
+    $certFile = Join-Path $tmpDir 'asset.pem'
+    Invoke-WebRequest -Uri $sigUrl -OutFile $sigFile -UseBasicParsing
+    Invoke-WebRequest -Uri $certUrl -OutFile $certFile -UseBasicParsing
+    $args = @('verify-blob', '--signature', $sigFile, '--certificate', $certFile, $filePath)
+    $res = & cosign @args 2>&1
+    if ($LASTEXITCODE -eq 0) { Write-Ok 'cosign verification OK'; return $true } else { Write-Err "cosign verify failed: $res" }
+  } finally { Remove-Item -Recurse -Force $tmpDir }
+}
+
+function Add-ToPath($installDir) {
+  if ($NoPath) { Write-Info 'Skipping PATH update (--NoPath)'; return }
+  $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
+  if ($userPath -and $userPath -like "*${installDir}*") { Write-Info 'Install dir already on PATH'; return }
+  # Best-effort: set user PATH
+  $newPath = if ($userPath) { $userPath + ';' + $installDir } else { $installDir }
+  [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+  Write-Ok "Appended $installDir to user PATH. Restart your shell to pick up changes."
+}
+
+# MAIN
+if ($Uninstall) {
+  if (Test-Path (Join-Path $InstallDir 'leakscan.exe')) {
+    if ($DryRun) { Write-Info "Would remove $InstallDir\leakscan.exe" } else { Remove-Item -Force -Path (Join-Path $InstallDir 'leakscan.exe'); Write-Ok 'Removed binary' }
+  } else { Write-Warn 'No installation found' }
+  exit 0
+}
+
+$os = 'windows'; $arch = Get-Architecture
+Write-Info "Platform: $os/$arch"
+Write-Info "Install dir: $InstallDir"
+Write-Info "Tag: $Tag"
+
+$release = Get-LatestRelease -Repo $Repo -Tag $Tag
+$asset = Find-Asset -release $release -os $os -arch $arch
+if (-not $asset) { Write-Err "No release asset found for $os/$arch" }
+Write-Step "Selected asset: $($asset.name)"
+
+$ver = Find-VerificationAssets -release $release -assetName $asset.name
+
+# Download asset
+$tmpDir = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ([guid]::NewGuid().ToString())
+if (-not $DryRun) { New-Item -ItemType Directory -Path $tmpDir | Out-Null }
+$assetFile = Join-Path $tmpDir $asset.name
+if ($DryRun) { Write-Info "DRY-RUN: would download $($asset.browser_download_url) to $assetFile" } else { Write-Step "Downloading asset..."; Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $assetFile -UseBasicParsing }
+
+# Verify: checksum first
+$verified = $false
+if ($ver.checksum) {
+  Write-Step "Attempting checksum verification..."
+  if (-not $DryRun) { $verified = Verify-Checksum -checksumUrl $ver.checksum.browser_download_url -filePath $assetFile }
+}
+if (-not $verified -and $VerifyCosign -and $ver.sig -and $ver.cert) {
+  Write-Step 'Attempting cosign verification...'
+  if (-not $DryRun) { $verified = Verify-Cosign -sigUrl $ver.sig.browser_download_url -certUrl $ver.cert.browser_download_url -filePath $assetFile }
+}
+if (-not $verified) { Write-Warn 'No verification succeeded (checksum/cosign may be missing). Proceeding at your risk.' }
+
+# Extract and install
+if ($DryRun) { Write-Info "DRY-RUN: would extract and install to $InstallDir"; exit 0 }
+if (-not (Test-Path $InstallDir)) { New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null }
+
+if ($asset.name -match '\.zip$') {
+  Expand-Archive -Path $assetFile -DestinationPath $tmpDir -Force
+  $exe = Get-ChildItem -Path $tmpDir -Recurse -Filter '*.exe' | Select-Object -First 1
+  if (-not $exe) { Write-Err 'No .exe found in archive' }
+  Copy-Item -Path $exe.FullName -Destination (Join-Path $InstallDir 'leakscan.exe') -Force
+} elseif ($asset.name -match '\.(tar.gz|tgz)$') {
+  # Windows: unlikely; but support for consistency
+  Write-Err 'tar.gz install path not implemented on Windows in this script' 
+} else {
+  Copy-Item -Path $assetFile -Destination (Join-Path $InstallDir 'leakscan.exe') -Force
+}
+Write-Ok "Installed leakscan to $InstallDir\leakscan.exe"
+
+# PATH
+Add-ToPath -installDir $InstallDir
+
+# Verify
+try {
+  $verOut = & (Join-Path $InstallDir 'leakscan.exe') --version 2>&1
+  Write-Ok "Verify: $verOut"
+} catch { Write-Warn 'Could not run leakscan --version. Restart shell or open a new terminal.' }
+
+Write-Info 'Done. Run "leakscan scan ." to try a scan.'
