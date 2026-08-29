@@ -73,6 +73,10 @@ test-fuzz:  ## Run all fuzz targets for $(FUZZ_TIME) each (default: 30s)
 	go test -fuzz=FuzzLoadRulesFromYAML_NoPanic \
 	        -fuzztime=$(FUZZ_TIME) \
 	        ./internal/detector/
+	@echo "▶ Fuzzing FuzzRedactionPipeline_NoRawSecretInOutput for $(FUZZ_TIME)..."
+	go test -fuzz=FuzzRedactionPipeline_NoRawSecretInOutput \
+	        -fuzztime=$(FUZZ_TIME) \
+	        ./internal/detector/
 	@echo "✔ Fuzz run complete. Corpus saved under testdata/fuzz/."
 
 # ── Lint ─────────────────────────────────────────────────────

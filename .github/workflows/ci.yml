@@ -68,3 +68,26 @@ jobs:
           name: coverage-report
           path: coverage.out
           retention-days: 7
+
+  # ── Job 3: Fuzz ──────────────────────────────────────────
+  fuzz:
+    name: Fuzz (redaction pipeline)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Run the redaction pipeline fuzz test to verify raw secrets
+      # never leak into JSON output. Fails the build on any violation.
+      - name: Fuzz redaction pipeline (30s)
+        run: go test -fuzz=FuzzRedactionPipeline_NoRawSecretInOutput -fuzztime=30s ./internal/detector/
+
+      # Also run the regex detector no-panic fuzz test
+      - name: Fuzz regex detector (30s)
+        run: go test -fuzz=FuzzRegexDetector_NoPanic -fuzztime=30s ./internal/detector/

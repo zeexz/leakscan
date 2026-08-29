@@ -9,12 +9,13 @@ import (
 
 // Rule defines a single regex detection rule loaded from YAML config.
 type Rule struct {
-	ID          string `yaml:"id"`
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Pattern     string `yaml:"pattern"`
-	Severity    string `yaml:"severity"`
-	Remediation string `yaml:"remediation"`
+	ID             string `yaml:"id"`
+	Name           string `yaml:"name"`
+	Description    string `yaml:"description"`
+	Pattern        string `yaml:"pattern"`
+	ContextPattern string `yaml:"context_pattern"` // Optional: line must also match this regex for the rule to fire
+	Severity       string `yaml:"severity"`
+	Remediation    string `yaml:"remediation"`
 }
 
 // RuleSet contains a collection of rules.

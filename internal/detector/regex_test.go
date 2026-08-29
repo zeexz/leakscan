@@ -133,7 +133,7 @@ func FuzzRegexDetector_NoPanic(f *testing.F) {
 	f.Add("export GITHUB_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz")
 	f.Add("-----BEGIN RSA PRIVATE KEY-----")
 	f.Add("")
-	f.Add("\x00\x01\x02\xff")               // Raw bytes
+	f.Add("\x00\x01\x02\xff")                // Raw bytes
 	f.Add("normal_var=123")                  // Benign assignment
 	f.Add(strings.Repeat("A", 10_000))       // Very long line
 	f.Add("key=" + strings.Repeat("x", 200)) // Long value

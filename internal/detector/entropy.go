@@ -88,12 +88,14 @@ func (e *EntropyDetector) Detect(content string, source SourceMeta) []Finding {
 
 			if (isSecretVarName && entropy >= e.Threshold) || (len(val) >= 20 && entropy >= e.Threshold+0.4) {
 				srcStr, locStr := formatSourceAndLocation(source, lineNum)
+				redacted := RedactValue(val)
+				ZeroString(&val) // Best-effort: overwrite raw secret in memory
 				findings = append(findings, Finding{
 					Source:      srcStr,
 					Type:        "High Entropy String / Potential Secret",
 					Location:    locStr,
 					Severity:    "high",
-					Redacted:    RedactValue(val),
+					Redacted:    redacted,
 					Remediation: "High entropy string assigned to secret variable. Verify if this is an API key/token and move to secure secret store.",
 				})
 			}

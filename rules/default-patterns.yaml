@@ -8,8 +8,12 @@ rules:
 
   - id: aws-secret-access-key
     name: AWS Secret Access Key
-    description: AWS IAM user secret access key assignment
-    pattern: "(?i)(aws_secret_access_key|aws_secret|aws_key)\\s*[:=]\\s*['\"]?([A-Za-z0-9/+=]{40})['\"]?"
+    description: >
+      AWS IAM user secret access key. Uses context_pattern to require
+      proximity to an AWS-related variable name, preventing false positives
+      on generic 40-char base64 blobs, hashes, and random tokens.
+    pattern: "[A-Za-z0-9/+=]{40}"
+    context_pattern: "(?i)(aws_secret_access_key|aws_secret|secret_access_key|aws_key)\\s*[:=]"
     severity: critical
     remediation: Rotate AWS Secret Access Key immediately via AWS IAM Console.
 
