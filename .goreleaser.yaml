@@ -105,6 +105,8 @@ release:
   github:
     owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
     name: leakscan
+  # Allow reruns/re-publishes for an existing tag by replacing assets.
+  replace_existing_artifacts: true
   # Prepend generated changelog to any existing release notes
   header: |
     ## leakscan {{ .Version }}
