@@ -63,5 +63,6 @@ func lazyVimHelpTemplate() string {
 }
 
 func init() {
-	// Global persistent flags can be registered here if needed
+	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "Show per-file scan progress")
+	rootCmd.PersistentFlags().BoolVarP(&quietFlag, "quiet", "q", false, "Suppress all output except exit code")
 }

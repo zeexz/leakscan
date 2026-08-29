@@ -17,6 +17,7 @@ type FilesystemScanner struct {
 	rootDir       string
 	detectors     []detector.Detector
 	ignoreMatcher *config.IgnoreMatcher
+	maxFileSize   int64 // Skip files larger than this (bytes). 0 = no limit.
 }
 
 // NewFilesystemScanner creates a new FilesystemScanner instance.
@@ -32,6 +33,12 @@ func NewFilesystemScanner(rootDir string, detectors []detector.Detector, ignoreM
 		detectors:     detectors,
 		ignoreMatcher: ignoreMatcher,
 	}
+}
+
+// SetMaxFileSize configures the maximum file size in bytes. Files larger than
+// this are skipped to prevent OOM on large binaries/logs. 0 means no limit.
+func (s *FilesystemScanner) SetMaxFileSize(size int64) {
+	s.maxFileSize = size
 }
 
 func (s *FilesystemScanner) Name() string {
@@ -82,7 +89,12 @@ func (s *FilesystemScanner) Scan(ctx context.Context) ([]detector.Finding, error
 			}
 		}
 
-		// 2. Read content and run detectors
+		// 2. Skip files exceeding max file size (prevents OOM on large logs/binaries)
+		if s.maxFileSize > 0 && info.Size() > s.maxFileSize {
+			return nil
+		}
+
+		// 3. Read content and run detectors
 		contentBytes, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return nil // Skip files that cannot be read (binary locked, permission denied, etc.)

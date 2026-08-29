@@ -1,4 +1,5 @@
 rules:
+  # ── AWS ────────────────────────────────────────────────────────
   - id: aws-access-key-id
     name: AWS Access Key ID
     description: AWS IAM user or temporary access key identifier
@@ -17,6 +18,7 @@ rules:
     severity: critical
     remediation: Rotate AWS Secret Access Key immediately via AWS IAM Console.
 
+  # ── GitHub ─────────────────────────────────────────────────────
   - id: github-token
     name: GitHub Personal Access Token
     description: GitHub fine-grained or classic personal access token
@@ -24,6 +26,7 @@ rules:
     severity: critical
     remediation: Revoke token immediately in GitHub Settings -> Developer settings -> Personal access tokens. Check security log.
 
+  # ── Slack ──────────────────────────────────────────────────────
   - id: slack-token
     name: Slack API Token
     description: Slack bot, user, app, or workspace access token
@@ -31,6 +34,7 @@ rules:
     severity: high
     remediation: Revoke Slack token in Slack App Management settings.
 
+  # ── Private Keys ───────────────────────────────────────────────
   - id: private-key
     name: Private Key Header
     description: Unencrypted RSA, EC, DSA, or OpenSSH Private Key block
@@ -38,6 +42,7 @@ rules:
     severity: critical
     remediation: Revoke and replace private key. Remove from authorized_keys and certificates.
 
+  # ── Generic Secrets ────────────────────────────────────────────
   - id: generic-env-secret
     name: Generic Environment Secret Assignment
     description: Variable assignment matching secret/key/token/password naming patterns with non-trivial values
@@ -48,6 +53,102 @@ rules:
   - id: bearer-token
     name: Bearer Authorization Token
     description: Hardcoded Authorization Bearer token header or export
-    pattern: "(?i)bearer\\s+[A-Za-z0-9_\\-\\.\x3d]{20,}"
+    pattern: "(?i)bearer\\s+[A-Za-z0-9_\\-\\.\\x3d]{20,}"
     severity: high
     remediation: Invalidate token immediately and fetch dynamically via safe OAuth flow or Secret Store.
+
+  # ── Google Cloud ───────────────────────────────────────────────
+  - id: google-api-key
+    name: Google Cloud API Key
+    description: Google Cloud Platform API key (AIzaSy prefix)
+    pattern: "AIza[0-9A-Za-z\\-_]{35}"
+    severity: high
+    remediation: Restrict or delete the API key in Google Cloud Console. Apply API key restrictions by HTTP referrer, IP, or API.
+
+  - id: google-oauth-token
+    name: Google OAuth Access Token
+    description: Google OAuth 2.0 access token (ya29 prefix)
+    pattern: "ya29\\.[0-9A-Za-z\\-_]{20,}"
+    severity: high
+    remediation: Revoke token. OAuth tokens are short-lived but may still be valid. Rotate the OAuth client secret.
+
+  # ── Stripe ─────────────────────────────────────────────────────
+  - id: stripe-live-key
+    name: Stripe Live Secret Key
+    description: Stripe live-mode secret key with full charge/refund permissions
+    pattern: "sk_live_[0-9a-zA-Z]{24,}"
+    severity: critical
+    remediation: Revoke immediately at https://dashboard.stripe.com/apikeys. Rotate all consumers. Check Stripe logs for unauthorized charges.
+
+  - id: stripe-test-key
+    name: Stripe Test Secret Key
+    description: Stripe test-mode secret key (lower risk but still sensitive)
+    pattern: "sk_test_[0-9a-zA-Z]{24,}"
+    severity: medium
+    remediation: Rotate test key at https://dashboard.stripe.com/apikeys. Ensure test keys are not used in production.
+
+  # ── Twilio ─────────────────────────────────────────────────────
+  - id: twilio-api-key
+    name: Twilio API Key
+    description: Twilio API key (SK prefix followed by 32 hex chars)
+    pattern: "SK[0-9a-fA-F]{32}"
+    severity: high
+    remediation: Revoke the API key in Twilio Console. Rotate Account SID and Auth Token if compromised.
+
+  # ── SendGrid ───────────────────────────────────────────────────
+  - id: sendgrid-api-key
+    name: SendGrid API Key
+    description: SendGrid email API key (SG. prefix)
+    pattern: "SG\\.[a-zA-Z0-9\\-_]{22}\\.[a-zA-Z0-9\\-_]{43}"
+    severity: critical
+    remediation: Revoke at https://app.sendgrid.com/settings/api_keys. Audit sent email logs for abuse.
+
+  # ── npm / PyPI ─────────────────────────────────────────────────
+  - id: npm-token
+    name: npm Access Token
+    description: npm registry authentication token
+    pattern: "npm_[A-Za-z0-9]{36}"
+    severity: critical
+    remediation: Revoke at https://www.npmjs.com/settings/tokens. Audit packages for unauthorized publishes.
+
+  - id: pypi-token
+    name: PyPI API Token
+    description: PyPI package index API token
+    pattern: "pypi-AgEI[A-Za-z0-9\\-_]{50,}"
+    severity: critical
+    remediation: Revoke at https://pypi.org/manage/account/#api-tokens. Audit published packages.
+
+  # ── Mailgun ────────────────────────────────────────────────────
+  - id: mailgun-api-key
+    name: Mailgun API Key
+    description: Mailgun email service API key
+    pattern: "key-[0-9a-zA-Z]{32}"
+    context_pattern: "(?i)(mailgun|mail_gun|MAILGUN)"
+    severity: high
+    remediation: Rotate at https://app.mailgun.com/app/account/security/api_keys. Audit email sending logs.
+
+  # ── JWT ────────────────────────────────────────────────────────
+  - id: jwt-token
+    name: Hardcoded JWT Token
+    description: Hardcoded JSON Web Token (3-part base64url structure)
+    pattern: "eyJ[A-Za-z0-9\\-_=]+\\.eyJ[A-Za-z0-9\\-_=]+\\.[A-Za-z0-9\\-_.+/=]+"
+    severity: high
+    remediation: Invalidate JWT signing secret and reissue tokens. Never hardcode JWTs — generate dynamically via your auth service.
+
+  # ── Datadog ────────────────────────────────────────────────────
+  - id: datadog-api-key
+    name: Datadog API Key
+    description: Datadog monitoring API key (32 hex chars with Datadog context)
+    pattern: "[a-f0-9]{32}"
+    context_pattern: "(?i)(datadog|dd_api|DD_API_KEY|DATADOG_API_KEY)\\s*[:=]"
+    severity: high
+    remediation: Rotate at https://app.datadoghq.com/organization-settings/api-keys. Audit Datadog activity logs.
+
+  # ── Heroku ─────────────────────────────────────────────────────
+  - id: heroku-api-key
+    name: Heroku API Key
+    description: Heroku platform API key (UUID format with Heroku context)
+    pattern: "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    context_pattern: "(?i)(heroku|HEROKU_API_KEY)\\s*[:=]"
+    severity: high
+    remediation: Regenerate at https://dashboard.heroku.com/account. Audit Heroku app deployments and config changes.

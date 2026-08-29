@@ -52,6 +52,25 @@ func buildRegexCorpus() []labeledSample {
 		{name: "TP: Bearer token in header", content: "Authorization: Bearer " + "eyJhbGciOiJIUzI1NiJ9.eyJ0ZXN0Ijp0cnVlfQ.signature", isSecret: true, ruleID: "bearer-token"},
 		{name: "TP: Bearer in export", content: "export TOKEN='Bearer " + "abc123def456ghi789jkl012mno345'", isSecret: true, ruleID: "bearer-token"},
 
+		// Google Cloud
+		{name: "TP: Google API Key", content: "GOOGLE_API_KEY=" + "AIzaSy" + "D1234567890abcdefghijklmnopqrstuvwx", isSecret: true, ruleID: "google-api-key"},
+		{name: "TP: Google OAuth Token", content: "ACCESS_TOKEN=" + "ya29." + "a0AfH6SMB_1234567890abcdefghijklmnopqrstuvwxyz", isSecret: true, ruleID: "google-oauth-token"},
+
+		// Stripe
+		{name: "TP: Stripe Live Key", content: "STRIPE_SECRET=" + "sk_live_" + "1234567890abcdefghijklmnopqrstuvwxyz", isSecret: true, ruleID: "stripe-live-key"},
+		{name: "TP: Stripe Test Key", content: "STRIPE_TEST=" + "sk_test_" + "1234567890abcdefghijklmnopqrstuvwxyz", isSecret: true, ruleID: "stripe-test-key"},
+
+		// Twilio & SendGrid
+		{name: "TP: Twilio API Key", content: "TWILIO_KEY=" + "SK" + "0123456789abcdef0123456789abcdef", isSecret: true, ruleID: "twilio-api-key"},
+		{name: "TP: SendGrid Key", content: "SENDGRID_API_KEY=" + "SG." + "1234567890123456789012.1234567890123456789012345678901234567890123", isSecret: true, ruleID: "sendgrid-api-key"},
+
+		// npm & PyPI
+		{name: "TP: npm Access Token", content: "//registry.npmjs.org/:_authToken=" + "npm_" + "1234567890abcdefghijklmnopqrstuvwxyz", isSecret: true, ruleID: "npm-token"},
+		{name: "TP: PyPI Token", content: "password = " + "pypi-AgEI" + "1234567890abcdefghijklmnopqrstuvwxyz1234567890abcdef", isSecret: true, ruleID: "pypi-token"},
+
+		// JWT Token
+		{name: "TP: Hardcoded JWT", content: "token = " + "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozG4B1sPzP_1234567890abcdef", isSecret: true, ruleID: "jwt-token"},
+
 		// ── False Positives (should NOT fire) ───────────────────────────────
 		// SHA1/SHA256 hashes
 		{name: "FP: SHA1 hash in comment", content: "# SHA1: da39a3ee5e6b4b0d3255bfef95601890afd80709", isSecret: false, ruleID: "aws-secret-access-key"},
