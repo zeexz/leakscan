@@ -7,8 +7,9 @@ import (
 )
 
 type compiledRule struct {
-	rule Rule
-	re   *regexp.Regexp
+	rule      Rule
+	re        *regexp.Regexp
+	contextRe *regexp.Regexp // Optional: if non-nil, the line must also match this for the rule to fire
 }
 
 // RegexDetector scans content against compiled regex rules.
@@ -24,10 +25,18 @@ func NewRegexDetector(ruleSet *RuleSet) (*RegexDetector, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid regex for rule %s (%s): %w", r.ID, r.Pattern, err)
 		}
-		compiled = append(compiled, compiledRule{
+		cr := compiledRule{
 			rule: r,
 			re:   re,
-		})
+		}
+		if r.ContextPattern != "" {
+			ctxRe, err := regexp.Compile(r.ContextPattern)
+			if err != nil {
+				return nil, fmt.Errorf("invalid context_pattern for rule %s (%s): %w", r.ID, r.ContextPattern, err)
+			}
+			cr.contextRe = ctxRe
+		}
+		compiled = append(compiled, cr)
 	}
 	return &RegexDetector{rules: compiled}, nil
 }
@@ -48,6 +57,11 @@ func (d *RegexDetector) Detect(content string, source SourceMeta) []Finding {
 		}
 
 		for _, cr := range d.rules {
+			// If context_pattern is set, the line must match it for the rule to fire
+			if cr.contextRe != nil && !cr.contextRe.MatchString(line) {
+				continue
+			}
+
 			matches := cr.re.FindAllStringSubmatch(line, -1)
 			for _, m := range matches {
 				if len(m) == 0 {
@@ -60,6 +74,7 @@ func (d *RegexDetector) Detect(content string, source SourceMeta) []Finding {
 				}
 
 				redacted := RedactValue(secretVal)
+				ZeroString(&secretVal) // Best-effort: overwrite raw secret in memory
 
 				// Determine Source and Location strings based on SourceMeta
 				srcStr, locStr := formatSourceAndLocation(source, lineNum)
