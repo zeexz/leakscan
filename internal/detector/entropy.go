@@ -63,6 +63,16 @@ func (e *EntropyDetector) Detect(content string, source SourceMeta) []Finding {
 			continue
 		}
 
+		prevLine := ""
+		if i > 0 {
+			prevLine = lines[i-1]
+		}
+
+		// Skip if line or previous line has leakscan:ignore or leakscan:ignore[entropy]
+		if HasIgnoreDirective(line, prevLine, "entropy") || HasIgnoreDirective(line, prevLine, "high-entropy") {
+			continue
+		}
+
 		matches := envAssignRegex.FindAllStringSubmatch(line, -1)
 		for _, m := range matches {
 			if len(m) < 3 {

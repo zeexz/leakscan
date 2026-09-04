@@ -56,7 +56,17 @@ func (d *RegexDetector) Detect(content string, source SourceMeta) []Finding {
 			continue
 		}
 
+		prevLine := ""
+		if i > 0 {
+			prevLine = lines[i-1]
+		}
+
 		for _, cr := range d.rules {
+			// Skip if inline comment directive ignores this rule or all rules
+			if HasIgnoreDirective(line, prevLine, cr.rule.ID) {
+				continue
+			}
+
 			// If context_pattern is set, the line must match it for the rule to fire
 			if cr.contextRe != nil && !cr.contextRe.MatchString(line) {
 				continue

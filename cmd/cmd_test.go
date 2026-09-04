@@ -80,3 +80,51 @@ func TestScanCmd_Execution(t *testing.T) {
 		t.Fatalf("scanCmd on clean directory failed: %v", err)
 	}
 }
+
+func TestBuildConfig_StagedFlag(t *testing.T) {
+	stagedFlag = true
+	defer func() { stagedFlag = false }()
+
+	cfg := buildConfig([]string{"."})
+	if !cfg.IncludeStaged {
+		t.Errorf("Expected IncludeStaged to be true when stagedFlag is set")
+	}
+}
+
+func TestScanCmd_BaselineWorkflow(t *testing.T) {
+	dir := t.TempDir()
+	envFile := filepath.Join(dir, "secrets.env")
+	if err := os.WriteFile(envFile, []byte("AWS_SECRET_KEY=AKIAIOSFODNN7EXAMPLE\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	baselineFile := filepath.Join(dir, ".leakscan-baseline.json")
+
+	// 1. Record baseline
+	recordBaselineFlag = baselineFile
+	baselineFlag = ""
+	quietFlag = true
+	failSeverityFlag = "none"
+	formatFlag = "json"
+
+	err := scanCmd.RunE(scanCmd, []string{dir})
+	if err != nil {
+		t.Fatalf("scanCmd recording baseline failed: %v", err)
+	}
+
+	if _, err := os.Stat(baselineFile); os.IsNotExist(err) {
+		t.Fatalf("baseline file was not created at %s", baselineFile)
+	}
+
+	// 2. Scan with baseline applied
+	recordBaselineFlag = ""
+	baselineFlag = baselineFile
+	err = scanCmd.RunE(scanCmd, []string{dir})
+	if err != nil {
+		t.Fatalf("scanCmd with baseline failed: %v", err)
+	}
+
+	// Reset flags
+	baselineFlag = ""
+	quietFlag = false
+}

@@ -49,6 +49,9 @@ It's a young project (early releases, small user base) — see [Project Status](
   - [`watch` Real-Time Monitor](#3-leakscan-watch-path)
   - [`init` Pre-Commit Setup](#4-leakscan-init)
 - [Configuration & Custom Rules](#-configuration--custom-rules)
+  - [Inline Comment Ignores (`leakscan:ignore`)](#inline-comment-ignores-leakscanignore)
+  - [Cryptographic Baseline Management](#cryptographic-baseline-management)
+  - [Remote Webhooks & Central Ingestion](#remote-webhooks--central-ingestion)
   - [Configuring `.leakscanner-ignore`](#configuring-leakscanner-ignore)
   - [Custom Pattern YAML Schema](#custom-pattern-yaml-schema)
   - [Shannon Entropy Thresholding](#shannon-entropy-thresholding)
@@ -87,9 +90,13 @@ If you're evaluating it, a reasonable path is: run it against a disposable repo 
 |  **Parallel Concurrency** | Non-blocking concurrent scanning across surfaces via `errgroup`. | Multiple scan surfaces run at once instead of sequentially. |
 |  **Dual-Engine Detection** | Regex pattern matching + Shannon Entropy ($H(X) \ge 3.8$) scoring. | Catches both known key formats (AWS, GitHub, Slack, …) and unlabeled high-randomness tokens. |
 |  **Custom Rules Engine** | Rule injection via `--rules-file`, merged with embedded defaults. | Add detection for internal/proprietary token formats without forking. |
+|  **Fast Staged Scanning** | Pre-commit staged diff inspection via `--staged` (`< 50ms`). | Only inspects staged additions in Git index — no full filesystem slowdown during commits. |
+|  **Inline Ignores** | Comment directives (`// leakscan:ignore`, `// leakscan:ignore[rule-id]`). | Suppress intentional test mocks or false positives without ignoring the entire file. |
+|  **Cryptographic Baselines** | Zero-knowledge legacy secret fingerprinting via `--record-baseline` / `--baseline`. | Adopt leakscan on legacy enterprise repositories without breaking existing CI builds. |
+|  **Remote Webhooks & Ingestion** | Dispatch finding alerts to Slack/Teams/Discord or upload SARIF to security servers. | Direct integration into corporate security operations and ChatOps workflows. |
 |  **Live Watcher** | Cross-platform polling watcher (3 s interval). | Re-scans on file save without depending on OS-specific filesystem event APIs. |
 |  **LazyVim TUI** | Terminal UI styled with TokyoNight, built on Charm `bubbletea` & `lipgloss`. | Keyboard-driven triage of findings instead of scrolling raw terminal output. |
-|  **CI/CD Enforcement** | Configurable `--fail-severity` thresholding and a JSON output format. | Can fail a PR/build on findings at or above a chosen severity. |
+|  **CI/CD Enforcement** | Configurable `--fail-severity` thresholding and JSON/SARIF output formats. | Can fail a PR/build on findings at or above a chosen severity. |
 |  **Supply-Chain Tooling** | GoReleaser + cosign keyless signing + CycloneDX SBOMs on every release. | Downloaded binaries can be verified against their build provenance via Sigstore/Rekor. |
 |  **Task Automation** | `Makefile` with `build`, `test`, `test-fuzz`, `lint`, `coverage` targets. | One command for each common dev workflow step. |
 
@@ -259,13 +266,19 @@ leakscan scan \
 
 | Flag | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `--staged` | `bool` | `false` | Scan only Git staged diffs in index (instant pre-commit check). |
 | `--include-git-history` | `bool` | `false` | Deep-scan every commit object across git history concurrently. |
 | `--include-shell-history` | `bool` | `false` | Audit local shell history files (`.bash_history`, `.zsh_history`). |
 | `--include-process-env` | `bool` | `false` | Audit environment variables of active running OS processes. |
 | `--rules-file` | `string` | `""` | Path to additional custom rules YAML file to merge with defaults. |
 | `--entropy-threshold` | `float` | `3.8` | Shannon entropy cutoff score ($0.0$ to disable). |
-| `--format` | `string` | `terminal` | Output format: `terminal` (LazyVim UI) or `json` (CI/CD artifact). |
+| `--format` | `string` | `terminal` | Output format: `terminal` (LazyVim UI), `json`, or `sarif`. |
 | `--ignore-file` | `string` | `.leakscanner-ignore` | Path to custom ignore rules file. |
+| `--record-baseline` | `string` | `""` | Path to export SHA256 snapshot of current findings into baseline JSON. |
+| `--baseline` | `string` | `""` | Path to baseline JSON file to suppress known existing legacy secrets. |
+| `--webhook-url` | `string` | `""` | Incoming webhook URL to dispatch alert payload (Slack, Teams, Discord). |
+| `--upload-url` | `string` | `""` | Remote HTTP POST endpoint to ingest full JSON or SARIF scan report. |
+| `--auth-token` | `string` | `""` | Bearer token for webhook/upload authentication (or `LEAKSCAN_AUTH_TOKEN`). |
 | `--fail-severity` | `string` | `none` | Return non-zero exit code on findings $\ge$ severity (`critical`, `high`, `medium`, `none`). |
 
 #### Exit Codes
@@ -330,15 +343,61 @@ leakscan watch --entropy-threshold 3.5 --rules-file ./my-rules.yaml .
 
 ### 4. `leakscan init`
 
-Scaffolds a `.leakscanner-ignore` configuration and installs a `.git/hooks/pre-commit` hook script in the target Git repository.
+Scaffolds a `.leakscanner-ignore` configuration and installs a high-speed `.git/hooks/pre-commit` hook script in the target Git repository:
 
 ```bash
 leakscan init
 ```
 
+The installed hook executes `leakscan scan --staged --fail-severity high`, scanning only staged lines in under 50ms before every commit.
+
 ---
 
 ## ⚙️ Configuration & Custom Rules
+
+### Inline Comment Ignores (`leakscan:ignore`)
+
+Developers can suppress intentional test mocks or false positives directly in code without ignoring the entire file:
+
+```go
+// 1. Suppress all rules on this line:
+apiKey := "AKIAIOSFODNN7EXAMPLE" // leakscan:ignore
+
+// 2. Suppress a specific rule ID with an optional reason:
+apiKey := "AKIAIOSFODNN7EXAMPLE" // leakscan:ignore[aws-access-key-id] reason="test fixture"
+
+// 3. Suppress via preceding comment line:
+// leakscan:ignore
+mockToken := "4N9xk0w2Pz8qL1mVaZbY"
+```
+
+Supported comment styles include `//`, `#`, `/* ... */`, and `<!-- ... -->`.
+
+### Cryptographic Baseline Management
+
+When rolling out `leakscan` to an existing team codebase with historical secrets, use **baselines** so builds only fail on *newly introduced* leaks:
+
+```bash
+# 1. Snapshot all existing findings into a cryptographic baseline
+leakscan scan --record-baseline .leakscan-baseline.json
+
+# 2. Run in CI/CD — existing baseline secrets are suppressed, only new leaks fail the build
+leakscan scan --baseline .leakscan-baseline.json --fail-severity high
+```
+
+> **Security Note:** Baseline files store immutable SHA256 hashes of `(type + normalized_path + redacted_preview)`. **Raw secrets are never written to disk.**
+
+### Remote Webhooks & Central Ingestion
+
+Push scan results directly into team channels or enterprise security platforms:
+
+```bash
+# Dispatch real-time alert to Slack / MS Teams / Discord on detected secrets
+leakscan scan --webhook-url https://hooks.slack.com/services/T00/B00/XXXX
+
+# Upload SARIF report to internal security dashboard
+leakscan scan --format sarif --upload-url https://security.company.internal/api/v1/scans --auth-token $LEAKSCAN_TOKEN
+```
 
 ### Configuring `.leakscanner-ignore`
 

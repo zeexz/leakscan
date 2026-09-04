@@ -11,6 +11,7 @@ func buildConfig(args []string) engine.Config {
 
 	return engine.Config{
 		TargetPath:       targetPath,
+		IncludeStaged:    stagedFlag,
 		IncludeGit:       includeGitHistory,
 		IncludeShell:     includeShell,
 		IncludeProcess:   includeProcess,

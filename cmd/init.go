@@ -47,11 +47,11 @@ var initCmd = &cobra.Command{
 # leakscan pre-commit hook
 # Prevents committing secrets to git repository
 
-echo "🔍 Running leakscan pre-commit security check..."
-leakscan scan --fail-severity high .
+echo "🔍 Running leakscan pre-commit security check (staged diffs)..."
+leakscan scan --staged --fail-severity high
 
 if [ $? -ne 0 ]; then
-    echo "❌ Leakscan detected potential secret leaks in repository!"
+    echo "❌ Leakscan detected potential secret leaks in staged changes!"
     echo "Please remove secrets or rotate compromised credentials before committing."
     exit 1
 fi

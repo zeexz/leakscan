@@ -20,6 +20,7 @@ import (
 // Config holds all parameters needed to execute a scan.
 type Config struct {
 	TargetPath       string
+	IncludeStaged    bool
 	IncludeGit       bool
 	IncludeShell     bool
 	IncludeProcess   bool
@@ -83,11 +84,17 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 	// 4. Register Scanners
 	var scanners []detector.Scanner
 
-	fsScanner := scanner.NewFilesystemScanner(cfg.TargetPath, detectors, ignoreMatcher)
-	if cfg.MaxFileSize > 0 {
-		fsScanner.SetMaxFileSize(cfg.MaxFileSize)
+	if cfg.IncludeStaged {
+		// In staged mode, only scan staged changes in git index
+		scanners = append(scanners, scanner.NewStagedScanner(cfg.TargetPath, detectors, ignoreMatcher))
+	} else {
+		// Standard filesystem scan
+		fsScanner := scanner.NewFilesystemScanner(cfg.TargetPath, detectors, ignoreMatcher)
+		if cfg.MaxFileSize > 0 {
+			fsScanner.SetMaxFileSize(cfg.MaxFileSize)
+		}
+		scanners = append(scanners, fsScanner)
 	}
-	scanners = append(scanners, fsScanner)
 
 	if cfg.IncludeGit {
 		scanners = append(scanners, scanner.NewGitScanner(cfg.TargetPath, detectors, ignoreMatcher))

@@ -9,13 +9,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [2.1.0] — 2026-09-04
+
 ### Added
-- Makefile with `build`, `test`, `test-fuzz`, `lint`, `coverage` targets
-- `.golangci.yml` — curated linter config (errcheck, gosec, staticcheck, revive)
-- `.goreleaser.yaml` — multi-arch builds, CycloneDX SBOMs, cosign keyless signing
-- GitHub Actions CI: lint + race-tested coverage on every push/PR
-- GitHub Actions Release: goreleaser pipeline triggered on `v*` tags
-- Fuzz tests: `FuzzRegexDetector_NoPanic`, `FuzzLoadRulesFromYAML_NoPanic`
+- **Fast Staged Git Scanning (`--staged`)** — Added dedicated `StagedScanner` running `git diff --cached -U0` (with pure Go `go-git` fallback) to inspect only added lines in the Git index in `< 50ms`.
+- **High-Speed Pre-Commit Hook** — Updated `leakscan init` to generate a pre-commit hook that invokes `leakscan scan --staged --fail-severity high` instead of full-filesystem scans.
+- **Inline Comment Ignores (`leakscan:ignore`)** — Added in-code suppression directives across Regex and Shannon Entropy detectors. Supports same-line and previous-line comments (`//`, `#`, `/* */`, `<!-- -->`) and optional rule targeting (e.g. `leakscan:ignore[aws-access-key-id]`).
+- **Cryptographic Baseline Management (`--baseline` & `--record-baseline`)** — Implemented zero-knowledge baseline snapshots using SHA256 fingerprints combining secret type, line-drift-resistant normalized path, and redacted secret preview. Allows teams with legacy codebases to adopt leakscan without breaking CI builds.
+- **Remote Webhooks & Central Ingestion (`--webhook-url` & `--upload-url`)** — Added real-time notification dispatch compatible with Slack, MS Teams, Discord, and custom security webhook endpoints, as well as full SARIF/JSON report uploads with bearer authentication.
 
 ---
 
